@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 import logging
 
-BOT_TOKEN = "8465996340:AAHLEqlMqcjIbWDCcM453h6L2CYpOAlavQ8"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 # =========================
 # RSI (Wilder Standard)
