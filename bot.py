@@ -3,8 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-#BOT_TOKEN = os.environ.get("BOT_TOKEN")
-BOT_TOKEN = "8465996340:AAHLEqlMqcjIbWDCcM453h6L2CYpOAlavQ8"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
