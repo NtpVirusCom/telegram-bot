@@ -215,7 +215,7 @@ async def stock_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = update.message.text.upper().strip()
 
     try:
-        data = yf.Ticker(symbol).history(period="3y")
+        data = yf.Ticker(symbol).history(period="5y")
 
         if data.empty or len(data) < 250:
             await update.message.reply_text("❌ ข้อมูลไม่เพียงพอ")
