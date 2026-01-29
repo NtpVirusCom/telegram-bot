@@ -46,7 +46,8 @@ def ema_slope(series, period=10):
 # =========================
 # Pivot High / Low
 # =========================
-def calculate_pivot_points(highs, lows, period=5):
+#def calculate_pivot_points(highs, lows, period=5):
+def calculate_pivot_points(highs, lows, period):
     pivots = []
 
     for i in range(period, len(highs) - period):
