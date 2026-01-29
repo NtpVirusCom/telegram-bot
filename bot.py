@@ -251,11 +251,11 @@ async def stock_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sr_text = "📐 แนวรับ / แนวต้าน\n"
         for i, s in enumerate(supports, 1):
             dist = (price - s["mid"]) / price * 100
-            sr_text += f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+            sr_text += f"• Support {i}: {s['mid']:.0f} (↓ {dist:.2f}%) | S={s['strength']}\n"
 
         for i, r in enumerate(resistances, 1):
             dist = (r["mid"] - price) / price * 100
-            sr_text += f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+            sr_text += f"• Resistance {i}: {r['mid']:.0f} (↑ {dist:.2f}%) | S={r['strength']}\n"
 
         thesis = pro_investor_thesis(
             price,
