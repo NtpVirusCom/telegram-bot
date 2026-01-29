@@ -61,7 +61,7 @@ def calculate_pivot_points(highs, lows, period=5):
 # =========================
 # Support / Resistance Zones
 # =========================
-def calculate_support_resistance(highs, lows, period=5, channel_width_pct=0.05):
+def calculate_support_resistance(highs, lows, period=5, channel_width_pct=0.01):
     pivots = calculate_pivot_points(highs, lows, period)
     zones = []
 
