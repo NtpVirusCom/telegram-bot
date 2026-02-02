@@ -5,9 +5,38 @@ import os
 import logging
 import pandas as pd
 import yfinance as yf
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filters, MessageHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
+
+
+def main_menu_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Technical Analysis", callback_data="menu_ta"),
+            InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),
+        ],
+        [
+            InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def post_result_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
+            InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),
+        ],
+        [
+            InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+
 
 
 # ==========================================================
@@ -105,8 +134,8 @@ HELP_TEXT = """
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-#openai_client = OpenAI(api_key=OPENAI_API_KEY)
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+#client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 # ==========================================================
@@ -362,8 +391,7 @@ Rules:
 • Max 120 words
 """
 
-    #res = openai_client.chat.completions.create(
-    res = client.chat.completions.create(
+    res = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a disciplined institutional investor."},
@@ -380,6 +408,9 @@ Rules:
 # ==========================================================
 def analyze(symbol: str) -> dict:
     data = yf.Ticker(symbol).history(period="3y")
+
+    if data.empty or len(data) < 50:
+        raise ValueError("SYMBOL_NOT_FOUND")
 
     close = data["Close"]
     highs, lows = data["High"].values, data["Low"].values
@@ -423,8 +454,67 @@ def analyze(symbol: str) -> dict:
 # ==========================================================
 # Telegram Handlers
 # ==========================================================
+#async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    await update.message.reply_text(START_TEXT)
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(START_TEXT)
+    await update.message.reply_text(
+        START_TEXT,
+        reply_markup=main_menu_keyboard()
+    )
+
+
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "menu_ta":
+        context.user_data["mode"] = "ta"
+        await query.message.reply_text("🔎 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+    elif data == "menu_ai":
+        context.user_data["mode"] = "ai"
+        await query.message.reply_text("🤖 พิมพ์สัญลักษณ์หุ้น เช่น `MSFT`")
+
+    elif data == "menu_help":
+        await query.message.reply_text(HELP_TEXT)
+
+    elif data == "menu_home":
+        await query.message.reply_text(
+            START_TEXT,
+            reply_markup=main_menu_keyboard()
+        )
+
+    # 🔁 วิเคราะห์ต่อทันที
+    elif data.startswith("again_ta:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ta(query, context)
+
+    elif data.startswith("again_ai:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ai(query, context)
+
+
+
+async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode")
+    if not mode:
+        return
+
+    symbol = update.message.text.strip().upper()
+    context.args = [symbol]
+
+    if mode == "ta":
+        await cmd_ta(update, context)
+    elif mode == "ai":
+        await cmd_ai(update, context)
+
+
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -433,9 +523,28 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
-    d = analyze(symbol)
+    
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
 
-    await update.message.reply_text(
+    thesis = pro_investor_thesis(
+        d['price'],
+        d['ema50'],
+        d['ema100'],
+        d['ema200'],
+        d['rsi'],
+        d['slope200'],
+        d['macd'].iloc[-1],
+        d['signal'].iloc[-1],
+        d['hist'].iloc[-1],
+    )
+
+    text = (
         f"📊 {symbol}\n"
         f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
         f"• EMA50: {d['ema50']:.2f}\n"
@@ -448,13 +557,34 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
         f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
         f"🧠 บทสรุปเชิงกลยุทธ์\n"
-        f"{pro_investor_thesis(d['price'], d['ema50'], d['ema100'], d['ema200'], d['rsi'], d['slope200'], d['macd'].iloc[-1], d['signal'].iloc[-1], d['hist'].iloc[-1])}"
+        f"{thesis}"
     )
 
 
+
+
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard(symbol)
+    #)
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard()
+    )
+
+
+    
 async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
-    d = analyze(symbol)
+
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
+
 
     ai = ai_thesis_generator(
         symbol,
@@ -470,11 +600,27 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         d["resistances"],
     )
 
-    await update.message.reply_text(
-        f"📊 {symbol}\n"
-        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
-        f"🤖 AI Thesis\n{ai}"
+    text = (
+        "📊 {symbol}\n"
+        "💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+        "🤖 AI Thesis\n{ai}"
+    ).format(
+        symbol=symbol,
+        price=d["price"],
+        change=d["change_pct"],
+        ai=ai,
     )
+
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard(symbol)
+    #)
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard()
+    )
+
+
 
 
 # ==========================================================
@@ -489,6 +635,9 @@ def main():
     logging.info("Pro Investor AI Stock Bot Started")
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CallbackQueryHandler(menu_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
