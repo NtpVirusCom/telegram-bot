@@ -1,6 +1,6 @@
-python-telegram-bot==20.7
-pandas==2.3.3
-pandas_market_calendars==5.3.0
-yf==0.0.5
-yfinance==1.0
-yt-dlp==2025.1.26
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+import yfinance as yf
+import pandas as pd
+import logging
+from openai import OpenAI
