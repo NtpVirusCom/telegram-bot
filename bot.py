@@ -1,3 +1,6 @@
+# ==========================================================
+# Imports & Config
+# ==========================================================
 import os
 import logging
 import pandas as pd
@@ -6,71 +9,169 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
 
-# =========================
-# ENV
-# =========================
+
+# ==========================================================
+# Text Assets
+# ==========================================================
+START_TEXT = """
+🤖 Investment Analysis Bot
+
+ผู้ช่วยวิเคราะห์หุ้นเชิงเทคนิคและกลยุทธ์
+ออกแบบในมุมมองนักลงทุนมืออาชีพ
+
+🔍 ฟีเจอร์หลัก
+• Technical Analysis (rule-based)
+• AI Investment Thesis (institutional tone)
+• Support / Resistance อัตโนมัติ
+• เปรียบเทียบกับตลาด (NASDAQ / S&P500)
+
+🚀 คำสั่งเริ่มต้น
+/ta <symbol>   วิเคราะห์เชิงเทคนิค
+/ai <symbol>   AI Investment Thesis
+
+📌 ตัวอย่าง
+/ta aapl
+/ai nvda
+
+ℹ️ ดูคำสั่งทั้งหมด
+/help
+
+⚠️ เพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
+"""
+
+HELP_TEXT = """
+📖 Command Guide
+
+━━━━━━━━━━
+🟢 CORE
+━━━━━━━━━━
+/ta <symbol>
+• Technical Analysis (rule-based)
+• Trend, Momentum, Support / Resistance
+• Market comparison + Strategic thesis
+
+/ai <symbol>
+• AI Investment Thesis
+• มุมมองเชิงกลยุทธ์แบบนักลงทุนสถาบัน
+• สรุป Risk / Opportunity / Action bias
+
+━━━━━━━━━━
+🟡 DETAIL (coming / optional)
+━━━━━━━━━━
+/levels <symbol>
+• Key Support / Resistance levels
+
+/trend <symbol>
+• Market structure & trend direction
+
+/momentum <symbol>
+• RSI & momentum regime
+
+━━━━━━━━━━
+🔵 AI PRO (future-ready)
+━━━━━━━━━━
+/bias <symbol>
+• Action bias: Accumulate / Hold / Wait / Reduce
+
+/risk <symbol>
+• Downside risk & scenario analysis
+
+/outlook <symbol>
+• Medium-term outlook (1–3 months)
+
+━━━━━━━━━━
+⚙️ UTILITY
+━━━━━━━━━━
+/start
+• เริ่มต้นใช้งาน bot
+
+/help
+• ดูรายการคำสั่งทั้งหมด
+
+━━━━━━━━━━
+📌 ตัวอย่าง
+━━━━━━━━━━
+/ta msft
+/ai tsla
+
+⚠️ ข้อมูลเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
+"""
+
+
+
+# ==========================================================
+# Environment
+# ==========================================================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
+#openai_client = OpenAI(api_key=OPENAI_API_KEY)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# =========================
-# RSI
-# =========================
-def calculate_rsi(close, period=14):
+
+# ==========================================================
+# Technical Indicators
+# ==========================================================
+def calculate_rsi(close, period: int = 14):
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
+
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
+
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-# =========================
-# MACD
-# =========================
+
 def calculate_macd(close):
     ema12 = close.ewm(span=12, adjust=False).mean()
     ema26 = close.ewm(span=26, adjust=False).mean()
+
     macd = ema12 - ema26
     signal = macd.ewm(span=9, adjust=False).mean()
     hist = macd - signal
+
     return macd, signal, hist
 
-# =========================
-# EMA slope
-# =========================
-def ema_slope(series, period=10):
+
+def ema_slope(series, period: int = 10):
     return series.diff(period).iloc[-1]
 
-# =========================
-# Support / Resistance
-# =========================
-def calculate_pivot_points(highs, lows, period=5):
+
+# ==========================================================
+# Support / Resistance Engine
+# ==========================================================
+def _pivot_points(highs, lows, window: int = 5):
     pivots = []
-    for i in range(period, len(highs) - period):
-        if highs[i] == max(highs[i-period:i+period+1]):
+    for i in range(window, len(highs) - window):
+        if highs[i] == max(highs[i - window:i + window + 1]):
             pivots.append(highs[i])
-        elif lows[i] == min(lows[i-period:i+period+1]):
+        elif lows[i] == min(lows[i - window:i + window + 1]):
             pivots.append(lows[i])
     return pivots
 
-def calculate_support_resistance(highs, lows, period=5, channel_width_pct=0.01):
-    pivots = calculate_pivot_points(highs, lows, period)
+
+def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
+    pivots = _pivot_points(highs, lows, window)
     zones = []
-    for value in pivots:
-        width = value * channel_width_pct
+
+    for p in pivots:
+        width = p * width_pct
         for z in zones:
-            if abs(value - z["mid"]) <= width:
-                z["mid"] = (z["mid"] + value) / 2
+            if abs(p - z["mid"]) <= width:
+                z["mid"] = (z["mid"] + p) / 2
                 z["strength"] += 1
                 break
         else:
-            zones.append({"mid": value, "strength": 1})
-    return sorted(zones, key=lambda x: x["strength"], reverse=True)
+            zones.append({"mid": p, "strength": 1})
+
+    return sorted(zones, key=lambda z: z["strength"], reverse=True)
+
 
 def split_support_resistance(zones, price, max_levels=2, min_strength=2):
     supports, resistances = [], []
+
     for z in zones:
         if z["strength"] < min_strength:
             continue
@@ -78,35 +179,39 @@ def split_support_resistance(zones, price, max_levels=2, min_strength=2):
 
     supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
     resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
+
     return supports, resistances
+
 
 def format_support_resistance(price, supports, resistances):
     lines = ["📐 Support / Resistance (Auto)"]
+
     for i, s in enumerate(supports, 1):
         dist = (price - s["mid"]) / price * 100
-        lines.append(
-            f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}"
-        )
+        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
+
     for i, r in enumerate(resistances, 1):
         dist = (r["mid"] - price) / price * 100
-        lines.append(
-            f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}"
-        )
+        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
+
     return "\n".join(lines)
 
-# =========================
+
+# ==========================================================
 # Market Comparison
-# =========================
+# ==========================================================
 def one_month_return(symbol):
     data = yf.Ticker(symbol).history(period="1mo")
     if data.empty or len(data) < 2:
         return None
     return (data["Close"].iloc[-1] - data["Close"].iloc[0]) / data["Close"].iloc[0] * 100
 
+
 def format_market_comparison(symbol, stock, nasdaq, sp500):
-    compare = []
-    compare.append("🟢 ชนะ NASDAQ" if stock > nasdaq else "🔴 แพ้ NASDAQ")
-    compare.append("🟢 ชนะ S&P500" if stock > sp500 else "🔴 แพ้ S&P500")
+    compare = [
+        "🟢 ชนะ NASDAQ" if stock > nasdaq else "🔴 แพ้ NASDAQ",
+        "🟢 ชนะ S&P500" if stock > sp500 else "🔴 แพ้ S&P500",
+    ]
 
     if stock > max(nasdaq, sp500):
         strength = "🚀 แข็งแกร่งกว่าตลาด (Outperform)"
@@ -124,88 +229,71 @@ def format_market_comparison(symbol, stock, nasdaq, sp500):
         f"{strength}"
     )
 
-# =========================
-# STRATEGIC THESIS
-# =========================
-#def pro_investor_thesis(price, ema50, ema100, ema200, rsi, macd, signal, hist):
+
+# ==========================================================
+# Strategic Thesis (Rule-based)
+# ==========================================================
 def pro_investor_thesis(price, ema50, ema100, ema200, rsi, slope200, macd, signal, hist):
     thesis = []
 
     if price > ema50 > ema100 > ema200:
-        #thesis.append("📈 โครงสร้างแนวโน้มเป็นขาขึ้นแข็งแกร่ง")
         thesis.append("  📈 แนวโน้มขาขึ้นแข็งแกร่ง")
         trend = "UP"
     elif price < ema200:
-        #thesis.append("📉 แนวโน้มหลักเป็นขาลง ระวังแรงขาย")
         thesis.append("  📉 แนวโน้มขาลง")
         trend = "DOWN"
     else:
-        #thesis.append("⚖️ ราคาอยู่ในช่วงสะสม / แกว่งตัว")
         thesis.append("  ⚖️ แนวโน้มแกว่งตัว / สะสมพลัง")
         trend = "SIDE"
 
     if rsi > 70:
-        #thesis.append("🔥 โมเมนตัมร้อนแรง มีความเสี่ยงย่อ")
         thesis.append("  🔥 โมเมนตัมร้อนแรง แต่เริ่มตึง")
     elif rsi < 30:
-        #thesis.append("❄️ โมเมนตัมอ่อน เริ่มน่าสนใจเชิงกลับตัว")
         thesis.append("  ❄️ โมเมนตัมอ่อน รอสัญญาณกลับตัว")
     else:
-        #thesis.append("✅ โมเมนตัมปกติ")
         thesis.append("  ✅ โมเมนตัมปกติ เหมาะกับการสะสม")
 
     if macd > signal and hist > 0:
-        #thesis.append("🚀 โมเมนตัมขาขึ้นได้รับการยืนยัน")
         thesis.append(" 🚀 โมเมนตัมขาขึ้นแข็งแกร่ง และขาขึ้นยืนยัน")
     elif macd < signal and hist < 0:
-        #thesis.append("⚠️ โมเมนตัมขาลงยังครองตลาด")
         thesis.append(" ⚠️ โมเมนตัมอ่อนแรง ระวังแรงขาย")
     else:
         thesis.append(" ⏳ โมเมนตัมก้ำกึ่ง รอสัญญาณชัด")
 
-    # Trend Strength
-    if slope200 > 0:
-        #thesis.append("  📐 EMA200 ชี้ขึ้น → Trend ระยะยาวยังแข็ง")
-        thesis.append("  📐 EMA200 ชี้ขึ้น แนวโน้มระยะยาวยังแข็งแกร่ง")
-    else:
-        #thesis.append("  📐 EMA200 แบน/ลง → ระวัง False Rally")
-        thesis.append("  📐 EMA200 แบน/ลง ระวังสัญญาณหลอก (False Rally)")
+    thesis.append(
+        "  📐 EMA200 ชี้ขึ้น แนวโน้มระยะยาวยังแข็งแกร่ง"
+        if slope200 > 0
+        else "  📐 EMA200 แบน/ลง ระวังสัญญาณหลอก (False Rally)"
+    )
 
-    #if price > ema50 and rsi < 60:
     if trend == "UP" and 40 <= rsi <= 60 and price <= ema50:
-        #thesis.append("🟢 กลยุทธ์: ทยอยสะสมเมื่อย่อ")
         thesis.append("  🟢 กลยุทธ์: ทยอยสะสม (Buy on Weakness)")
-    #elif rsi > 70:
     elif trend == "UP" and rsi > 70:
         thesis.append("  🟡 กลยุทธ์: ถือ / รอย่อ")
     elif trend == "DOWN":
         thesis.append("  🔴 กลยุทธ์: หลีกเลี่ยง / รอฐานใหม่")
     else:
-        #thesis.append("🔴 กลยุทธ์: รอดู Confirmation")
         thesis.append("  🟡 กลยุทธ์: รอดู Confirmation")
 
     return "\n".join(thesis)
 
-# =========================
-# AI THESIS
-# =========================
-def format_sr_for_prompt(supports, resistances):
+
+# ==========================================================
+# AI Thesis
+# ==========================================================
+def _format_sr_for_prompt(supports, resistances):
     lines = []
     if supports:
-        lines.append(
-            "Supports: " + ", ".join(f"{s['mid']:.2f}" for s in supports)
-        )
+        lines.append("Supports: " + ", ".join(f"{s['mid']:.2f}" for s in supports))
     if resistances:
-        lines.append(
-            "Resistances: " + ", ".join(f"{r['mid']:.2f}" for r in resistances)
-        )
+        lines.append("Resistances: " + ", ".join(f"{r['mid']:.2f}" for r in resistances))
     return "\n".join(lines)
 
 
-def ai_thesis_generator(symbol, price, ema50, ema100, ema200,
-                        rsi, macd, signal, hist, supports, resistances):
+def ai_thesis_generator(symbol, price, ema50, ema100, ema200, rsi,
+                        macd, signal, hist, supports, resistances):
 
-    sr_text = format_sr_for_prompt(supports, resistances)
+    sr_text = _format_sr_for_prompt(supports, resistances)
 
     prompt = f"""
 You are a professional fund manager.
@@ -274,21 +362,25 @@ Rules:
 • Max 120 words
 """
 
+    #res = openai_client.chat.completions.create(
     res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a disciplined institutional investor."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.3
+        temperature=0.3,
     )
+
     return res.choices[0].message.content
 
-# =========================
-# CORE ANALYSIS
-# =========================
-def analyze(symbol):
+
+# ==========================================================
+# Core Analysis Pipeline
+# ==========================================================
+def analyze(symbol: str) -> dict:
     data = yf.Ticker(symbol).history(period="3y")
+
     close = data["Close"]
     highs, lows = data["High"].values, data["Low"].values
 
@@ -297,21 +389,17 @@ def analyze(symbol):
 
     ema50 = close.ewm(span=50, adjust=False).mean().iloc[-1]
     ema100 = close.ewm(span=100, adjust=False).mean().iloc[-1]
-    #ema200 = close.ewm(span=200, adjust=False).mean().iloc[-1]
+
     ema200_series = close.ewm(span=200, adjust=False).mean()
     ema200 = ema200_series.iloc[-1]
 
     rsi = calculate_rsi(close).iloc[-1]
     slope200 = ema_slope(ema200_series)
-    #slope200 = ema_slope(ema200)
+
     macd, signal, hist = calculate_macd(close)
 
     zones = calculate_support_resistance(highs, lows)
     supports, resistances = split_support_resistance(zones, price)
-
-    stock_1m = one_month_return(symbol)
-    nasdaq_1m = one_month_return("^IXIC")
-    sp500_1m = one_month_return("^GSPC")
 
     return {
         "price": price,
@@ -326,31 +414,26 @@ def analyze(symbol):
         "hist": hist,
         "supports": supports,
         "resistances": resistances,
-        "stock_1m": stock_1m,
-        "nasdaq_1m": nasdaq_1m,
-        "sp500_1m": sp500_1m
+        "stock_1m": one_month_return(symbol),
+        "nasdaq_1m": one_month_return("^IXIC"),
+        "sp500_1m": one_month_return("^GSPC"),
     }
 
-# =========================
-# HANDLER
-# =========================
-async def cmd_a(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+# ==========================================================
+# Telegram Handlers
+# ==========================================================
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(START_TEXT)
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(HELP_TEXT)
+
+
+async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
     d = analyze(symbol)
-
-    sr_text = format_support_resistance(
-        d["price"], d["supports"], d["resistances"]
-    )
-
-    market_text = format_market_comparison(
-        symbol, d["stock_1m"], d["nasdaq_1m"], d["sp500_1m"]
-    )
-
-    thesis = pro_investor_thesis(
-        d["price"], d["ema50"], d["ema100"], d["ema200"],
-        d["rsi"],d["slope200"],
-        d["macd"].iloc[-1], d["signal"].iloc[-1], d["hist"].iloc[-1]
-    )
 
     await update.message.reply_text(
         f"📊 {symbol}\n"
@@ -362,42 +445,59 @@ async def cmd_a(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• MACD: {d['macd'].iloc[-1]:.3f}\n"
         f"• Signal: {d['signal'].iloc[-1]:.3f}\n"
         f"• Hist: {d['hist'].iloc[-1]:+.3f}\n\n"
-        f"{sr_text}\n\n"
-        f"{market_text}\n\n"
-        f"🧠 บทสรุปเชิงกลยุทธ์\n{thesis}"
+        f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
+        f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
+        f"🧠 บทสรุปเชิงกลยุทธ์\n"
+        f"{pro_investor_thesis(d['price'], d['ema50'], d['ema100'], d['ema200'], d['rsi'], d['slope200'], d['macd'].iloc[-1], d['signal'].iloc[-1], d['hist'].iloc[-1])}"
     )
 
-async def cmd_b(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
     d = analyze(symbol)
 
     ai = ai_thesis_generator(
-        symbol, d["price"],
-        d["ema50"], d["ema100"], d["ema200"],
-        d["rsi"],  d["macd"].iloc[-1],
-        d["signal"].iloc[-1], d["hist"].iloc[-1],
-        d["supports"], d["resistances"]
+        symbol,
+        d["price"],
+        d["ema50"],
+        d["ema100"],
+        d["ema200"],
+        d["rsi"],
+        d["macd"].iloc[-1],
+        d["signal"].iloc[-1],
+        d["hist"].iloc[-1],
+        d["supports"],
+        d["resistances"],
     )
 
     await update.message.reply_text(
-        #f"📊 {symbol}\n💵 {d['price']:.2f}\n\n🤖 AI Thesis\n{ai}"
         f"📊 {symbol}\n"
         f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
         f"🤖 AI Thesis\n{ai}"
     )
 
-# =========================
-# MAIN
-# =========================
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
+
+# ==========================================================
+# App Bootstrap
+# ==========================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s"
+)
 
 def main():
     logging.info("Pro Investor AI Stock Bot Started")
-    #logging.basicConfig(level=logging.INFO)
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("a", cmd_a))
-    app.add_handler(CommandHandler("b", cmd_b))
+
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("help", cmd_help))
+
+    app.add_handler(CommandHandler("ta", cmd_ta))
+    app.add_handler(CommandHandler("ai", cmd_ai))
+
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
