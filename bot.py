@@ -181,7 +181,8 @@ def _pivot_points(highs, lows, window: int = 5):
     return pivots
 
 
-def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
+#def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
+def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
     pivots = _pivot_points(highs, lows, window)
     zones = []
 
@@ -412,8 +413,17 @@ def analyze(symbol: str) -> dict:
     if data.empty or len(data) < 50:
         raise ValueError("SYMBOL_NOT_FOUND")
 
+    # =========================
+    # Full data (for trend / EMA / momentum)
+    # =========================
     close = data["Close"]
-    highs, lows = data["High"].values, data["Low"].values
+
+    # =========================
+    # 1Y data (for Support / Resistance)
+    # =========================
+    data_1y = data.tail(252)   # ~252 trading days ≈ 1 year
+    highs_1y = data_1y["High"].values
+    lows_1y = data_1y["Low"].values
 
     price = close.iloc[-1]
     change_pct = (price - close.iloc[-2]) / close.iloc[-2] * 100
@@ -429,7 +439,8 @@ def analyze(symbol: str) -> dict:
 
     macd, signal, hist = calculate_macd(close)
 
-    zones = calculate_support_resistance(highs, lows)
+    # ✅ SR ใช้ข้อมูล 1 ปี
+    zones = calculate_support_resistance(highs_1y, lows_1y)
     supports, resistances = split_support_resistance(zones, price)
 
     return {
