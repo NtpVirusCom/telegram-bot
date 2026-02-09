@@ -5,6 +5,8 @@ import os
 import logging
 import pandas as pd
 import yfinance as yf
+import matplotlib.pyplot as plt
+import io
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
@@ -15,6 +17,10 @@ def main_menu_keyboard():
         [
             InlineKeyboardButton("📊 Technical Analysis", callback_data="menu_ta"),
             InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),
+            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+        ],
+        [
+            InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
@@ -28,6 +34,10 @@ def post_result_keyboard():
         [
             InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
             InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),
+            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+        ],
+        [
+            InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -36,6 +46,17 @@ def post_result_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_sr_zones_1y(data, price):
+    data_1y = data.tail(252)  # ~1Y
+    highs = data_1y["High"].values
+    lows = data_1y["Low"].values
+
+    support, resistance = calculate_support_resistance_zones(
+        highs, lows, price,
+        period=4,
+        channel_pct=0.01
+    )
+    return support, resistance
 
 
 
@@ -182,49 +203,121 @@ def _pivot_points(highs, lows, window: int = 5):
 
 
 #def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
-def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
-    pivots = _pivot_points(highs, lows, window)
+#def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
+#    pivots = _pivot_points(highs, lows, window)
+#    zones = []
+#
+#    for p in pivots:
+#        width = p * width_pct
+#        for z in zones:
+#            if abs(p - z["mid"]) <= width:
+#                z["mid"] = (z["mid"] + p) / 2
+#                z["strength"] += 1
+#                break
+#        else:
+#            zones.append({"mid": p, "strength": 1})
+#
+#    return sorted(zones, key=lambda z: z["strength"], reverse=True)
+
+
+#def split_support_resistance(zones, price, max_levels=2, min_strength=2):
+#    supports, resistances = [], []
+#
+#    for z in zones:
+#        if z["strength"] < min_strength:
+#            continue
+#        (supports if z["mid"] < price else resistances).append(z)
+#
+#    supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
+#    resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
+#
+#    return supports, resistances
+
+
+#def format_sr_zones(price, support, resistance):
+#    lines = ["📐 Support / Resistance (Zones)"]
+#
+#    if support:
+#        for s in support:
+#            dist = (price - s["mid"]) / price * 100
+#            lines.append(
+#                f"• Support: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}"
+#            )
+#    else:
+#        lines.append("• Support: ไม่มีระดับที่ชัดเจน")
+#
+#    if resistance:
+#        for r in resistance:
+#            dist = (r["mid"] - price) / price * 100
+#            lines.append(
+#                f"• Resistance: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}"
+#            )
+#    else:
+#        lines.append("• Resistance: ไม่มีระดับที่ชัดเจน")
+#
+#    return "\n".join(lines)
+
+
+
+#def format_support_resistance(price, supports, resistances):
+#    lines = ["📐 Support / Resistance (Auto)"]
+#
+#    for i, s in enumerate(supports, 1):
+#        dist = (price - s["mid"]) / price * 100
+#        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
+#
+#    for i, r in enumerate(resistances, 1):
+#        dist = (r["mid"] - price) / price * 100
+#        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
+#
+#    return "\n".join(lines)
+
+def calculate_support_resistance_zones(highs, lows, price, period=4, channel_pct=0.01):
+    pivots = _pivot_points(highs, lows, period)
+    channel_width = price * channel_pct
     zones = []
 
     for p in pivots:
-        width = p * width_pct
+        found = False
         for z in zones:
-            if abs(p - z["mid"]) <= width:
+            if abs(p - z["mid"]) <= channel_width:
                 z["mid"] = (z["mid"] + p) / 2
                 z["strength"] += 1
+                found = True
                 break
-        else:
+        if not found:
             zones.append({"mid": p, "strength": 1})
 
-    return sorted(zones, key=lambda z: z["strength"], reverse=True)
+    zones = [z for z in zones if z["strength"] >= 2]
+
+    support = sorted(
+        [z for z in zones if z["mid"] < price],
+        key=lambda x: abs(price - x["mid"])
+    )
+
+    resistance = sorted(
+        [z for z in zones if z["mid"] > price],
+        key=lambda x: abs(price - x["mid"])
+    )
+
+    return support[:5], resistance[:5]
 
 
-def split_support_resistance(zones, price, max_levels=2, min_strength=2):
-    supports, resistances = [], []
+def calculate_rr(price, support, resistance):
+    if not support or not resistance:
+        return None, None, None
 
-    for z in zones:
-        if z["strength"] < min_strength:
-            continue
-        (supports if z["mid"] < price else resistances).append(z)
+    nearest_support = support[0]["mid"]
+    nearest_resistance = resistance[0]["mid"]
 
-    supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
-    resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
+    risk_pct = (price - nearest_support) / price * 100
+    reward_pct = (nearest_resistance - price) / price * 100
 
-    return supports, resistances
+    if risk_pct <= 0:
+        return None, None, None
 
-
-def format_support_resistance(price, supports, resistances):
-    lines = ["📐 Support / Resistance (Auto)"]
-
-    for i, s in enumerate(supports, 1):
-        dist = (price - s["mid"]) / price * 100
-        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
-
-    for i, r in enumerate(resistances, 1):
-        dist = (r["mid"] - price) / price * 100
-        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
-
-    return "\n".join(lines)
+    rr = reward_pct / risk_pct if risk_pct > 0 else None
+    return risk_pct, reward_pct, rr
 
 
 # ==========================================================
@@ -440,8 +533,10 @@ def analyze(symbol: str) -> dict:
     macd, signal, hist = calculate_macd(close)
 
     # ✅ SR ใช้ข้อมูล 1 ปี
-    zones = calculate_support_resistance(highs_1y, lows_1y)
-    supports, resistances = split_support_resistance(zones, price)
+    #zones = calculate_support_resistance(highs_1y, lows_1y)
+    #supports, resistances = split_support_resistance(zones, price)
+    supports, resistances = get_sr_zones_1y(data, price)
+
 
     return {
         "price": price,
@@ -460,6 +555,111 @@ def analyze(symbol: str) -> dict:
         "nasdaq_1m": one_month_return("^IXIC"),
         "sp500_1m": one_month_return("^GSPC"),
     }
+
+
+def plot_technical_chart(symbol: str):
+    # โหลดข้อมูล 1 ปี
+    data_1y = yf.Ticker(symbol).history(period="1y")
+
+    if data_1y.empty or len(data_1y) < 50:
+        raise ValueError("NOT_ENOUGH_DATA")
+
+    close = data_1y["Close"]
+    highs = data_1y["High"].values
+    lows = data_1y["Low"].values
+
+    # EMA
+    ema50 = close.ewm(span=50).mean()
+    ema100 = close.ewm(span=100).mean()
+    ema200 = close.ewm(span=200).mean()
+
+    # Momentum
+    macd, signal, hist = calculate_macd(close)
+    rsi = calculate_rsi(close)
+
+    # Support / Resistance (ใช้ข้อมูล 1 ปี)
+    price = close.iloc[-1]
+    #zones = calculate_support_resistance(highs, lows)
+    #supports, resistances = split_support_resistance(zones, price)
+    supports, resistances = calculate_support_resistance_zones(
+        highs, lows, price
+    )
+
+
+    # แสดงเฉพาะ 1 เดือนล่าสุด
+    data_1m = data_1y.tail(21)
+
+    close = close.loc[data_1m.index]
+    ema50 = ema50.loc[data_1m.index]
+    ema100 = ema100.loc[data_1m.index]
+    ema200 = ema200.loc[data_1m.index]
+    macd = macd.loc[data_1m.index]
+    signal = signal.loc[data_1m.index]
+    hist = hist.loc[data_1m.index]
+    rsi = rsi.loc[data_1m.index]
+
+    # =====================
+    # Plot
+    # =====================
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        3, 1,
+        figsize=(10, 10),
+        sharex=True,
+        gridspec_kw={"height_ratios": [3, 1, 1.5]}
+    )
+
+    # Price + EMA
+    ax1.plot(close, label="Price")
+    ax1.plot(ema50, label="EMA50")
+    ax1.plot(ema100, label="EMA100")
+    ax1.plot(ema200, label="EMA200")
+
+    # Support
+    for s in supports:
+        ax1.axhline(
+            y=s["mid"],
+            linestyle="--",
+            alpha=0.7,
+            label=f"Support {s['mid']:.2f}"
+        )
+
+    # Resistance
+    for r in resistances:
+        ax1.axhline(
+            y=r["mid"],
+            linestyle=":",
+            alpha=0.7,
+            label=f"Resistance {r['mid']:.2f}"
+        )
+
+    ax1.set_title(f"{symbol} — Price + EMA + Support / Resistance")
+    ax1.legend(loc="best")
+    ax1.grid(True)
+
+    # MACD
+    ax2.plot(macd, label="MACD")
+    ax2.plot(signal, label="Signal")
+    ax2.bar(hist.index, hist, label="Hist")
+    ax2.legend()
+    ax2.grid(True)
+
+    # RSI
+    ax3.plot(rsi, label="RSI")
+    ax3.axhline(70, linestyle="--")
+    ax3.axhline(30, linestyle="--")
+    ax3.set_ylim(0, 100)
+    ax3.legend()
+    ax3.grid(True)
+
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+
+    return buf
+
+
 
 
 # ==========================================================
@@ -490,6 +690,14 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "ai"
         await query.message.reply_text("🤖 พิมพ์สัญลักษณ์หุ้น เช่น `MSFT`")
 
+    elif data == "menu_sr":
+        context.user_data["mode"] = "sr"
+        await query.message.reply_text("📐 พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
+
+    elif data == "menu_ch":
+        context.user_data["mode"] = "ch"
+        await query.message.reply_text("📈 พิมพ์สัญลักษณ์หุ้น เช่น `NVDA`")
+
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
 
@@ -499,6 +707,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu_keyboard()
         )
 
+    
     # 🔁 วิเคราะห์ต่อทันที
     elif data.startswith("again_ta:"):
         symbol = data.split(":")[1]
@@ -524,16 +733,25 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_ta(update, context)
     elif mode == "ai":
         await cmd_ai(update, context)
+    elif mode == "sr":
+        await cmd_sr(update, context)
+    elif mode == "ch":
+        await cmd_ch(update, context)
+
 
 
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
+    context.user_data["last_symbol"] = symbol
+
 
 
 async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
     
     try:
         d = analyze(symbol)
@@ -565,7 +783,8 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• MACD: {d['macd'].iloc[-1]:.3f}\n"
         f"• Signal: {d['signal'].iloc[-1]:.3f}\n"
         f"• Hist: {d['hist'].iloc[-1]:+.3f}\n\n"
-        f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
+        #f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
+        #f"{format_sr_zones(d['price'], d['supports'], d['resistances'])}\n\n"
         f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
         f"🧠 บทสรุปเชิงกลยุทธ์\n"
         f"{thesis}"
@@ -632,6 +851,89 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+
+    try:
+        data_1y = yf.Ticker(symbol).history(period="1y")
+        if data_1y.empty or len(data_1y) < 50:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ ไม่พบชื่อหุ้นนี้")
+        return
+
+    price = data_1y["Close"].iloc[-1]
+    highs = data_1y["High"].values
+    lows = data_1y["Low"].values
+    prev_price = data_1y["Close"].iloc[-2]
+    change = (price - prev_price) / prev_price * 100
+
+
+    support, resistance = calculate_support_resistance_zones(
+        highs, lows, price
+    )
+
+    risk_pct, reward_pct, rr = calculate_rr(price, support, resistance)
+
+    text = f"📐 SR Zones — {symbol}\n"
+    #text += f"💵 Price: {price:.2f}\n\n"
+    text += f"💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+    #text += f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+
+    text += "🟢 Support Zones\n"
+    if support:
+        for s in support:
+            dist = (price - s["mid"]) / price * 100
+            text += f"• {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+    else:
+        text += "• ไม่มีระดับที่ชัดเจน\n"
+
+    text += "\n🔴 Resistance Zones\n"
+    if resistance:
+        for r in resistance:
+            dist = (r["mid"] - price) / price * 100
+            text += f"• {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+    else:
+        text += "• ไม่มีระดับที่ชัดเจน\n"
+
+    if rr:
+        text += (
+            f"\n⚖️ Risk / Reward\n"
+            f"• Downside risk: ↓{risk_pct:.2f}%\n"
+            f"• Upside reward: ↑{reward_pct:.2f}%\n"
+            f"• R/R Ratio: {rr:.2f}x\n"
+        )
+
+        if rr >= 3:
+            text += "🟢 โครงสร้างราคาน่าสนใจ (Asymmetric)\n"
+        elif rr >= 2:
+            text += "🟡 โครงสร้างสมดุล\n"
+        else:
+            text += "🔴 Risk สูงเมื่อเทียบกับ Reward\n"
+    else:
+        text += "• ไม่สามารถประเมิน Risk / Reward ได้\n"
+
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard()
+    )
+
+
+
+async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+
+    try:
+        chart = plot_technical_chart(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📈 {symbol}\nPrice + EMA + MACD",
+        reply_markup=post_result_keyboard()
+    )
 
 
 # ==========================================================
@@ -655,6 +957,8 @@ def main():
 
     app.add_handler(CommandHandler("ta", cmd_ta))
     app.add_handler(CommandHandler("ai", cmd_ai))
+    app.add_handler(CommandHandler("sr", cmd_sr))
+    app.add_handler(CommandHandler("ch", cmd_ch))
 
     app.run_polling()
 
