@@ -5,3 +5,4 @@ yf==0.0.5
 yfinance==1.0
 yt-dlp==2025.1.26
 openai==2.15.0
+matplotlib==3.6.2
