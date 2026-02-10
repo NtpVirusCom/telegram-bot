@@ -16,10 +16,10 @@ def main_menu_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("📊 Technical Analysis", callback_data="menu_ta"),
-            InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),
-            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+            InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),            
         ],
         [
+            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
             InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
         [
@@ -29,15 +29,19 @@ def main_menu_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 
-def post_result_keyboard():
+def post_result_keyboard(symbol: str):
     keyboard = [
         [
-            InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
-            InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),
-            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+            #InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
+            InlineKeyboardButton("📊 Technical ต่อ", callback_data=f"again_ta:{symbol}"),
+            #InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),     
+            InlineKeyboardButton("🤖 AI ต่อ", callback_data=f"again_ai:{symbol}"),        
         ],
         [
-            InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
+            #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+            InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
+            #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
+            InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -76,12 +80,16 @@ START_TEXT = """
 • เปรียบเทียบกับตลาด (NASDAQ / S&P500)
 
 🚀 คำสั่งเริ่มต้น
-/ta <symbol>   วิเคราะห์เชิงเทคนิค
-/ai <symbol>   AI Investment Thesis
+/ta <symbol>  วิเคราะห์เชิงเทคนิค
+/ai <symbol>  AI Investment Thesis
+/sr <symbol>  Support / Resistance
+/ch <symbol>  แสดงกราฟราคา
 
 📌 ตัวอย่าง
 /ta aapl
-/ai nvda
+/ai msft
+/sr nvda
+/ch pltr
 
 ℹ️ ดูคำสั่งทั้งหมด
 /help
@@ -345,9 +353,9 @@ def format_market_comparison(symbol, stock, nasdaq, sp500):
 
     return (
         "🧪 เปรียบเทียบตลาด 1 เดือน\n"
-        f"• {symbol}: {stock:+.2f}%\n"
-        f"• NASDAQ: {nasdaq:+.2f}%\n"
-        f"• S&P500: {sp500:+.2f}%\n"
+        f"  • {symbol}: {stock:+.2f}%\n"
+        f"  • NASDAQ: {nasdaq:+.2f}%\n"
+        f"  • S&P500: {sp500:+.2f}%\n"
         f"{' | '.join(compare)}\n"
         f"{strength}"
     )
@@ -719,6 +727,16 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_ai(query, context)
 
+    elif data.startswith("again_sr:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_sr(query, context)
+
+    elif data.startswith("again_ch:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ch(query, context)
+
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -793,14 +811,14 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-    #await update.message.reply_text(
-    #    text,
-    #    reply_markup=post_result_keyboard(symbol)
-    #)
     await update.message.reply_text(
         text,
-        reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
     )
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
 
 
     
@@ -841,14 +859,14 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ai=ai,
     )
 
-    #await update.message.reply_text(
-    #    text,
-    #    reply_markup=post_result_keyboard(symbol)
-    #)
     await update.message.reply_text(
         text,
-        reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
     )
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
 
 
 async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -884,24 +902,24 @@ async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if support:
         for s in support:
             dist = (price - s["mid"]) / price * 100
-            text += f"• {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+            text += f"  • {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}\n"
     else:
-        text += "• ไม่มีระดับที่ชัดเจน\n"
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
 
     text += "\n🔴 Resistance Zones\n"
     if resistance:
         for r in resistance:
             dist = (r["mid"] - price) / price * 100
-            text += f"• {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+            text += f"  • {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}\n"
     else:
-        text += "• ไม่มีระดับที่ชัดเจน\n"
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
 
     if rr:
         text += (
             f"\n⚖️ Risk / Reward\n"
-            f"• Downside risk: ↓{risk_pct:.2f}%\n"
-            f"• Upside reward: ↑{reward_pct:.2f}%\n"
-            f"• R/R Ratio: {rr:.2f}x\n"
+            f"  • Downside risk: ↓{risk_pct:.2f}%\n"
+            f"  • Upside reward: ↑{reward_pct:.2f}%\n"
+            f"  • R/R Ratio: {rr:.2f}x\n"
         )
 
         if rr >= 3:
@@ -913,9 +931,13 @@ async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text += "• ไม่สามารถประเมิน Risk / Reward ได้\n"
 
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
     await update.message.reply_text(
         text,
-        reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
     )
 
 
@@ -932,7 +954,8 @@ async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(
         photo=chart,
         caption=f"📈 {symbol}\nPrice + EMA + MACD",
-        reply_markup=post_result_keyboard()
+        #reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
     )
 
 
