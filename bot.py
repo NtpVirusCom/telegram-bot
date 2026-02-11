@@ -1,4 +1,4 @@
-# ==========================================================  v.59
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import os
@@ -569,17 +569,25 @@ def plot_technical_chart(symbol: str):
     # โหลดข้อมูล 1 ปี
     data_1y = yf.Ticker(symbol).history(period="1y")
 
+    # โหลดข้อมูล 3 ปี
+    data_3y = yf.Ticker(symbol).history(period="3y")
+
     if data_1y.empty or len(data_1y) < 50:
         raise ValueError("NOT_ENOUGH_DATA")
 
-    close = data_1y["Close"]
-    highs = data_1y["High"].values
-    lows = data_1y["Low"].values
+    close = data_3y["Close"]
+    highs = data_3y["High"].values
+    lows = data_3y["Low"].values
 
     # EMA
-    ema50 = close.ewm(span=50).mean()
-    ema100 = close.ewm(span=100).mean()
-    ema200 = close.ewm(span=200).mean()
+    #ema50 = close.ewm(span=50).mean()
+    #ema100 = close.ewm(span=100).mean()
+    #ema200 = close.ewm(span=200).mean()
+
+    ema50 = close.ewm(span=50, adjust=False).mean()
+    ema100 = close.ewm(span=100, adjust=False).mean()
+    ema200 = close.ewm(span=200, adjust=False).mean()
+
 
     # Momentum
     macd, signal, hist = calculate_macd(close)
@@ -589,13 +597,30 @@ def plot_technical_chart(symbol: str):
     price = close.iloc[-1]
     #zones = calculate_support_resistance(highs, lows)
     #supports, resistances = split_support_resistance(zones, price)
+    #supports, resistances = calculate_support_resistance_zones(
+    #    highs, lows, price
+    #)
+
+    # ใช้ข้อมูล 1 ปี เหมือน cmd_sr
+    data_sr = data_3y.tail(252)
+
     supports, resistances = calculate_support_resistance_zones(
-        highs, lows, price
+        data_sr["High"].values,
+        data_sr["Low"].values,
+        price
     )
 
 
+
+    # ===== Last indicator values =====
+    macd_last = macd.iloc[-1]
+    signal_last = signal.iloc[-1]
+    hist_last = hist.iloc[-1]
+    rsi_last = rsi.iloc[-1]
+
+
     # แสดงเฉพาะ 1 เดือนล่าสุด
-    data_1m = data_1y.tail(21)
+    data_1m = data_3y.tail(21)
 
     close = close.loc[data_1m.index]
     ema50 = ema50.loc[data_1m.index]
@@ -617,10 +642,18 @@ def plot_technical_chart(symbol: str):
     )
 
     # Price + EMA
-    ax1.plot(close, label="Price")
-    ax1.plot(ema50, label="EMA50")
-    ax1.plot(ema100, label="EMA100")
-    ax1.plot(ema200, label="EMA200")
+    # ===== Last values =====
+    price_last = close.iloc[-1]
+    ema50_last = ema50.iloc[-1]
+    ema100_last = ema100.iloc[-1]
+    ema200_last = ema200.iloc[-1]
+
+    # ===== Plot Price + EMA (with values in legend) =====
+    ax1.plot(close, label=f"Price: {price_last:.2f}")
+    ax1.plot(ema50, label=f"EMA50: {ema50_last:.2f}")
+    ax1.plot(ema100, label=f"EMA100: {ema100_last:.2f}")
+    ax1.plot(ema200, label=f"EMA200: {ema200_last:.2f}")
+
 
     # Support
     for s in supports:
@@ -640,19 +673,36 @@ def plot_technical_chart(symbol: str):
             label=f"Resistance {r['mid']:.2f}"
         )
 
-    ax1.set_title(f"{symbol} — Price + EMA + Support / Resistance")
+    sr_info = f"Support: {len(supports)} | Resistance: {len(resistances)}"
+
+    ax1.text(
+        0.01, 0.02,
+        sr_info,
+        transform=ax1.transAxes,
+        fontsize=9,
+        verticalalignment="bottom",
+        bbox=dict(boxstyle="round", alpha=0.2)
+    )
+
+
+
+    ax1.set_title(f"{symbol} — Price + EMA + MACD + Support / Resistance + RSI")
     ax1.legend(loc="best")
     ax1.grid(True)
 
     # MACD
-    ax2.plot(macd, label="MACD")
-    ax2.plot(signal, label="Signal")
-    ax2.bar(hist.index, hist, label="Hist")
+    ax2.plot(macd, label=f"MACD: {macd_last:.3f}")
+    ax2.plot(signal, label=f"Signal: {signal_last:.3f}")
+    ax2.bar(hist.index, hist, label=f"Hist: {hist_last:+.3f}")
+    #ax2.plot(macd, label="MACD")
+    #ax2.plot(signal, label="Signal")
+    #ax2.bar(hist.index, hist, label="Hist")
     ax2.legend()
     ax2.grid(True)
 
     # RSI
-    ax3.plot(rsi, label="RSI")
+    #ax3.plot(rsi, label="RSI")
+    ax3.plot(rsi, label=f"RSI: {rsi_last:.2f}")
     ax3.axhline(70, linestyle="--")
     ax3.axhline(30, linestyle="--")
     ax3.set_ylim(0, 100)
@@ -953,7 +1003,7 @@ async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_photo(
         photo=chart,
-        caption=f"📈 {symbol}\nPrice + EMA + MACD",
+        caption=f"📈 {symbol}\nPrice + EMA + MACD + Support / Resistance + RSI",
         #reply_markup=post_result_keyboard()
         reply_markup=post_result_keyboard(symbol)
     )
