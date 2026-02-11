@@ -1,4 +1,4 @@
-# ========================================================== 63
+# ========================================================== v.64
 # Imports & Config
 # ==========================================================
 import os
@@ -801,8 +801,12 @@ def plot_technical_chart(symbol: str):
 )
 
 
-    ax1.legend(loc="upper left")
-    ax1.grid(True)
+    ax1.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0
+    )
+
 
 
     # MACD
@@ -827,11 +831,12 @@ def plot_technical_chart(symbol: str):
     ax2.plot(macd, label=f"MACD {macd_last:.3f}", color="#00B0FF")
     ax2.plot(signal, label=f"Signal {signal_last:.3f}", color="#FFAB00")
 
-    ax2.legend(loc="upper left")
+    ax2.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0
+    )
 
-
-    ax2.legend(loc="upper left")
-    ax2.grid(True)
 
 
     # RSI
@@ -850,8 +855,15 @@ def plot_technical_chart(symbol: str):
     ax3.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
 
     ax3.set_ylim(0, 100)
-    ax3.legend(loc="upper left")
-    ax3.grid(True)
+    ax3.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0
+    )
+
+
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.78)
 
 
     buf = io.BytesIO()
