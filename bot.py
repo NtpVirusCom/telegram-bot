@@ -1,4 +1,4 @@
-# ==========================================================
+# ========================================================== 63
 # Imports & Config
 # ==========================================================
 import os
@@ -564,8 +564,47 @@ def analyze(symbol: str) -> dict:
         "sp500_1m": one_month_return("^GSPC"),
     }
 
+# ==========================================================
+# Chart Style (Bloomberg / TradingView)
+# ==========================================================
+def apply_tv_style():
+    plt.style.use("dark_background")
+
+    plt.rcParams.update({
+        "figure.facecolor": "#0e1117",
+        "axes.facecolor": "#0e1117",
+        "axes.edgecolor": "#2a2e39",
+        "axes.labelcolor": "#cfd3dc",
+        "xtick.color": "#cfd3dc",
+        "ytick.color": "#cfd3dc",
+        "grid.color": "#2a2e39",
+        "grid.linestyle": "--",
+        "grid.linewidth": 0.5,
+        "font.size": 10,
+        "legend.frameon": False,
+    })
+
+def calculate_heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
+    ha = pd.DataFrame(index=df.index)
+
+    ha["HA_Close"] = (df["Open"] + df["High"] + df["Low"] + df["Close"]) / 4
+
+    ha_open = []
+    for i in range(len(df)):
+        if i == 0:
+            ha_open.append((df["Open"].iloc[0] + df["Close"].iloc[0]) / 2)
+        else:
+            ha_open.append((ha_open[i-1] + ha["HA_Close"].iloc[i-1]) / 2)
+
+    ha["HA_Open"] = ha_open
+    ha["HA_High"] = pd.concat([df["High"], ha["HA_Open"], ha["HA_Close"]], axis=1).max(axis=1)
+    ha["HA_Low"]  = pd.concat([df["Low"],  ha["HA_Open"], ha["HA_Close"]], axis=1).min(axis=1)
+
+    return ha
+
 
 def plot_technical_chart(symbol: str):
+    apply_tv_style()
     # โหลดข้อมูล 1 ปี
     data_1y = yf.Ticker(symbol).history(period="1y")
 
@@ -622,6 +661,10 @@ def plot_technical_chart(symbol: str):
     # แสดงเฉพาะ 1 เดือนล่าสุด
     data_1m = data_3y.tail(21)
 
+    # ===== Heikin Ashi =====
+    ha = calculate_heikin_ashi(data_1m)
+
+
     close = close.loc[data_1m.index]
     ema50 = ema50.loc[data_1m.index]
     ema100 = ema100.loc[data_1m.index]
@@ -649,65 +692,167 @@ def plot_technical_chart(symbol: str):
     ema200_last = ema200.iloc[-1]
 
     # ===== Plot Price + EMA (with values in legend) =====
-    ax1.plot(close, label=f"Price: {price_last:.2f}")
-    ax1.plot(ema50, label=f"EMA50: {ema50_last:.2f}")
-    ax1.plot(ema100, label=f"EMA100: {ema100_last:.2f}")
-    ax1.plot(ema200, label=f"EMA200: {ema200_last:.2f}")
+    #ax1.plot(close, label=f"Price: {price_last:.2f}")
+    #ax1.plot(ema50, label=f"EMA50: {ema50_last:.2f}")
+    #ax1.plot(ema100, label=f"EMA100: {ema100_last:.2f}")
+    #ax1.plot(ema200, label=f"EMA200: {ema200_last:.2f}")
+    # ===== Price + EMA =====
+    #ax1.plot(close, label=f"Price {price_last:.2f}",
+    #         color="white", linewidth=1.8)
+    width = 0.6
+
+    for i in range(len(ha)):
+        color = "#00E676" if ha["HA_Close"].iloc[i] >= ha["HA_Open"].iloc[i] else "#FF5252"
+
+        # Wick
+        ax1.vlines(
+            ha.index[i],
+            ha["HA_Low"].iloc[i],
+            ha["HA_High"].iloc[i],
+            color=color,
+            linewidth=1
+        )
+
+        # Body
+        ax1.bar(
+            ha.index[i],
+            abs(ha["HA_Close"].iloc[i] - ha["HA_Open"].iloc[i]),
+            bottom=min(ha["HA_Open"].iloc[i], ha["HA_Close"].iloc[i]),
+            width=width,
+            color=color,
+            alpha=0.9
+        )
+
+
+    ax1.plot(ema50, label=f"EMA50 {ema50_last:.2f}",
+             color="#2962FF", linewidth=1.2)
+
+    ax1.plot(ema100, label=f"EMA100 {ema100_last:.2f}",
+             color="#FF6D00", linewidth=1.2)
+
+    ax1.plot(ema200, label=f"EMA200 {ema200_last:.2f}",
+             color="#D50000", linewidth=1.6)
+
 
 
     # Support
-    for s in supports:
-        ax1.axhline(
-            y=s["mid"],
-            linestyle="--",
-            alpha=0.7,
-            label=f"Support {s['mid']:.2f}"
-        )
+    #for s in supports:
+    #    ax1.axhline(
+    #        y=s["mid"],
+    #        linestyle="--",
+    #        alpha=0.7,
+    #        label=f"Support {s['mid']:.2f}"
+    #    )
 
     # Resistance
-    for r in resistances:
+    #for r in resistances:
+    #    ax1.axhline(
+    #        y=r["mid"],
+    #        linestyle=":",
+    #        alpha=0.7,
+    #        label=f"Resistance {r['mid']:.2f}"
+    #    )
+
+    # ===== Support =====
+    for i, s in enumerate(supports, 1):
         ax1.axhline(
-            y=r["mid"],
-            linestyle=":",
-            alpha=0.7,
-            label=f"Resistance {r['mid']:.2f}"
+            y=s["mid"],
+            color="#00E676",
+            linestyle="--",
+            linewidth=0.9,
+            alpha=0.6,
+            label=f"S{i}: {s['mid']:.2f}"
         )
 
-    sr_info = f"Support: {len(supports)} | Resistance: {len(resistances)}"
+    # ===== Resistance =====
+    for i, r in enumerate(resistances, 1):
+        ax1.axhline(
+            y=r["mid"],
+            color="#FF5252",
+            linestyle=":",
+            linewidth=0.9,
+            alpha=0.6,
+            label=f"R{i}: {r['mid']:.2f}"
+        )
 
-    ax1.text(
-        0.01, 0.02,
-        sr_info,
-        transform=ax1.transAxes,
-        fontsize=9,
-        verticalalignment="bottom",
-        bbox=dict(boxstyle="round", alpha=0.2)
+    # ===== Legend Title =====
+    ax1.legend(
+        loc="upper left",
+        title=f"SR (S={len(supports)} | R={len(resistances)})"
     )
 
 
 
-    ax1.set_title(f"{symbol} — Price + EMA + MACD + Support / Resistance + RSI")
-    ax1.legend(loc="best")
+
+    #ax1.set_title(f"{symbol} — Price + EMA + MACD + Support / Resistance + RSI")
+    #ax1.legend(loc="best")
+    #ax1.grid(True)
+    #ax1.set_title(
+    #    f"{symbol} — Price & Trend Structure",
+    #    loc="left",
+    #    fontsize=12,
+    #    color="white"
+    #)
+    ax1.set_title(
+        f"{symbol} — Heikin Ashi Trend Structure",
+        loc="left",
+        fontsize=12,
+        color="white"
+)
+
+
+    ax1.legend(loc="upper left")
     ax1.grid(True)
 
+
     # MACD
-    ax2.plot(macd, label=f"MACD: {macd_last:.3f}")
-    ax2.plot(signal, label=f"Signal: {signal_last:.3f}")
-    ax2.bar(hist.index, hist, label=f"Hist: {hist_last:+.3f}")
+    #ax2.plot(macd, label=f"MACD: {macd_last:.3f}")
+    #ax2.plot(signal, label=f"Signal: {signal_last:.3f}")
+    #ax2.bar(hist.index, hist, label=f"Hist: {hist_last:+.3f}")
     #ax2.plot(macd, label="MACD")
     #ax2.plot(signal, label="Signal")
     #ax2.bar(hist.index, hist, label="Hist")
-    ax2.legend()
+    #ax2.legend()
+    #ax2.grid(True)
+    hist_colors = ["#00E676" if h >= 0 else "#FF5252" for h in hist]
+
+    ax2.bar(
+        hist.index,
+        hist,
+        color=hist_colors,
+        alpha=0.8,
+        label=f"Hist {hist_last:+.3f}"
+    )
+
+    ax2.plot(macd, label=f"MACD {macd_last:.3f}", color="#00B0FF")
+    ax2.plot(signal, label=f"Signal {signal_last:.3f}", color="#FFAB00")
+
+    ax2.legend(loc="upper left")
+
+
+    ax2.legend(loc="upper left")
     ax2.grid(True)
+
 
     # RSI
     #ax3.plot(rsi, label="RSI")
-    ax3.plot(rsi, label=f"RSI: {rsi_last:.2f}")
-    ax3.axhline(70, linestyle="--")
-    ax3.axhline(30, linestyle="--")
+    #ax3.plot(rsi, label=f"RSI: {rsi_last:.2f}")
+    #ax3.axhline(70, linestyle="--")
+    #ax3.axhline(30, linestyle="--")
+    #ax3.set_ylim(0, 100)
+    #ax3.legend()
+    #ax3.grid(True)
+
+    ax3.plot(rsi, label=f"RSI {rsi_last:.2f}",
+         color="#AB47BC", linewidth=1.4)
+
+    ax3.axhline(70, color="#FF5252", linestyle="--", alpha=0.5)
+    ax3.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
+
     ax3.set_ylim(0, 100)
-    ax3.legend()
+    ax3.legend(loc="upper left")
     ax3.grid(True)
+
 
     buf = io.BytesIO()
     plt.tight_layout()
