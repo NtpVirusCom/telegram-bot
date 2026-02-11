@@ -1,4 +1,4 @@
-# ========================================================== v.64
+# ========================================================== v.65
 # Imports & Config
 # ==========================================================
 import os
@@ -776,10 +776,19 @@ def plot_technical_chart(symbol: str):
         )
 
     # ===== Legend Title =====
-    ax1.legend(
-        loc="upper left",
-        title=f"SR (S={len(supports)} | R={len(resistances)})"
+    #ax1.legend(
+    #    loc="upper left",
+    #    title=f"SR (S={len(supports)} | R={len(resistances)})"
+    #)
+
+    legend1 = ax1.legend(
+    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+    framealpha=0.15,
+    fontsize=9
     )
+
+    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
+
 
 
 
@@ -801,12 +810,8 @@ def plot_technical_chart(symbol: str):
 )
 
 
-    ax1.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1),
-        borderaxespad=0
-    )
-
+    #ax1.legend(loc="upper left")
+    ax1.grid(True)
 
 
     # MACD
@@ -831,12 +836,18 @@ def plot_technical_chart(symbol: str):
     ax2.plot(macd, label=f"MACD {macd_last:.3f}", color="#00B0FF")
     ax2.plot(signal, label=f"Signal {signal_last:.3f}", color="#FFAB00")
 
-    ax2.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1),
-        borderaxespad=0
+    legend1 = ax2.legend(
+    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+    framealpha=0.15,
+    fontsize=9
     )
 
+    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
+
+
+
+    #ax2.legend(loc="upper left")
+    ax2.grid(True)
 
 
     # RSI
@@ -855,15 +866,19 @@ def plot_technical_chart(symbol: str):
     ax3.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
 
     ax3.set_ylim(0, 100)
-    ax3.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1),
-        borderaxespad=0
+
+    legend1 = ax3.legend(
+        loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+        framealpha=0.15,
+        fontsize=9
     )
 
+    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
 
-    plt.tight_layout()
-    plt.subplots_adjust(right=0.78)
+
+
+    #ax3.legend(loc="upper left")
+    ax3.grid(True)
 
 
     buf = io.BytesIO()
