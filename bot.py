@@ -1,4 +1,4 @@
-# ========================================================== v.65
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import os
@@ -649,6 +649,10 @@ def plot_technical_chart(symbol: str):
         price
     )
 
+    # ✅ แสดงแค่ 2 ระดับใกล้ราคาที่สุด
+    supports = supports[:2]
+    resistances = resistances[:2]
+
 
 
     # ===== Last indicator values =====
@@ -755,25 +759,68 @@ def plot_technical_chart(symbol: str):
 
     # ===== Support =====
     for i, s in enumerate(supports, 1):
+        y = s["mid"]
+
         ax1.axhline(
-            y=s["mid"],
+            y=y,
             color="#00E676",
             linestyle="--",
             linewidth=0.9,
             alpha=0.6,
-            label=f"S{i}: {s['mid']:.2f}"
+            #label=f"S{i}: {y:.2f}"
         )
+
+        # 🔹 แสดงตัวเลขบนเส้นด้านขวา
+        ax1.text(
+            #close.index[-1],
+            close.index[-1] + pd.Timedelta(days=0.5),
+            y,
+            f"{y:.0f}",
+            color="#00E676",
+            fontsize=8,
+            verticalalignment="center",
+            horizontalalignment="left",
+            bbox=dict(
+                facecolor="#0e1117",
+                edgecolor="none",
+                alpha=0.8,
+                boxstyle="round,pad=0.2"
+            )
+
+        )
+
 
     # ===== Resistance =====
     for i, r in enumerate(resistances, 1):
+        y = r["mid"]
+
         ax1.axhline(
-            y=r["mid"],
+            y=y,
             color="#FF5252",
             linestyle=":",
             linewidth=0.9,
             alpha=0.6,
-            label=f"R{i}: {r['mid']:.2f}"
+            #label=f"R{i}: {y:.2f}"
         )
+
+        # 🔹 แสดงตัวเลขบนเส้นด้านขวา
+        ax1.text(
+            #close.index[-1],
+            close.index[-1] + pd.Timedelta(days=0.5),
+            y,
+            f"{y:.0f}",
+            color="#FF5252",
+            fontsize=8,
+            verticalalignment="center",
+            horizontalalignment="left",
+            bbox=dict(
+                facecolor="#0e1117",
+                edgecolor="none",
+                alpha=0.8,
+                boxstyle="round,pad=0.2"
+            )
+        )
+
 
     # ===== Legend Title =====
     #ax1.legend(
@@ -781,11 +828,25 @@ def plot_technical_chart(symbol: str):
     #    title=f"SR (S={len(supports)} | R={len(resistances)})"
     #)
 
+    #legend1 = ax1.legend(
+    #loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+    #framealpha=0.15,
+    #fontsize=9
+    #)
+
     legend1 = ax1.legend(
-    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
-    framealpha=0.15,
-    fontsize=9
+        loc="upper left",
+        fontsize=9,
+        frameon=True
     )
+
+    legend1.get_frame().set_facecolor("#1c2128")  # พื้นหลังเข้ม
+    legend1.get_frame().set_edgecolor("#2a2e39")  # ขอบ
+    legend1.get_frame().set_alpha(0.9)            # ความทึบ
+    legend1.get_frame().set_linewidth(0.8)
+    legend1.get_frame().set_boxstyle("round,pad=0.4")
+
+
 
     #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
 
@@ -836,11 +897,24 @@ def plot_technical_chart(symbol: str):
     ax2.plot(macd, label=f"MACD {macd_last:.3f}", color="#00B0FF")
     ax2.plot(signal, label=f"Signal {signal_last:.3f}", color="#FFAB00")
 
-    legend1 = ax2.legend(
-    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
-    framealpha=0.15,
-    fontsize=9
+    #legend1 = ax2.legend(
+    #loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+    #framealpha=0.15,
+    #fontsize=9
+    #)
+
+    legend2 = ax2.legend(
+        loc="upper left",
+        fontsize=9,
+        frameon=True
     )
+
+    legend2.get_frame().set_facecolor("#1c2128")
+    legend2.get_frame().set_edgecolor("#2a2e39")
+    legend2.get_frame().set_alpha(0.9)
+    legend2.get_frame().set_linewidth(0.8)
+    legend2.get_frame().set_boxstyle("round,pad=0.4")
+
 
     #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
 
@@ -867,11 +941,24 @@ def plot_technical_chart(symbol: str):
 
     ax3.set_ylim(0, 100)
 
-    legend1 = ax3.legend(
-        loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
-        framealpha=0.15,
-        fontsize=9
+    #legend1 = ax3.legend(
+    #    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
+    #    framealpha=0.15,
+    #    fontsize=9
+    #)
+
+    legend3 = ax3.legend(
+        loc="upper left",
+        fontsize=9,
+        frameon=True
     )
+
+    legend3.get_frame().set_facecolor("#1c2128")
+    legend3.get_frame().set_edgecolor("#2a2e39")
+    legend3.get_frame().set_alpha(0.9)
+    legend3.get_frame().set_linewidth(0.8)
+    legend3.get_frame().set_boxstyle("round,pad=0.4")
+
 
     #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
 
@@ -1124,7 +1211,7 @@ async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if support:
         for s in support:
             dist = (price - s["mid"]) / price * 100
-            text += f"  • {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+            text += f"  • {s['mid']:.0f} (↓ {dist:.2f}%) | S={s['strength']}\n"
     else:
         text += "  • ไม่มีระดับที่ชัดเจน\n"
 
@@ -1132,7 +1219,7 @@ async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if resistance:
         for r in resistance:
             dist = (r["mid"] - price) / price * 100
-            text += f"  • {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+            text += f"  • {r['mid']:.0f} (↑ {dist:.2f}%) | S={r['strength']}\n"
     else:
         text += "  • ไม่มีระดับที่ชัดเจน\n"
 
