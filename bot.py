@@ -1,4 +1,4 @@
-# ==========================================================
+# ========================================================== v.75
 # Imports & Config
 # ==========================================================
 import os
@@ -726,6 +726,78 @@ def plot_technical_chart(symbol: str):
             color=color,
             alpha=0.9
         )
+
+    # ===== Real Last Price =====
+    real_close = data_1m["Close"].iloc[-1]
+
+    # ===== Prevent price label overlap with SR =====
+    label_y = real_close
+
+    # รวมระดับ SR ทั้งหมด
+    sr_levels = [s["mid"] for s in supports] + [r["mid"] for r in resistances]
+
+    # กำหนด threshold ระยะห่าง (0.5% ของราคา)
+    threshold = real_close * 0.005
+
+    for level in sr_levels:
+        if abs(label_y - level) < threshold:
+            # ถ้าราคาอยู่เหนือ SR → ขยับขึ้น
+            if real_close >= level:
+                label_y += threshold
+            # ถ้าอยู่ต่ำกว่า SR → ขยับลง
+            else:
+                label_y -= threshold
+
+
+    # 👉 ใช้สีจากแท่ง Heikin Ashi ล่าสุด
+    ha_open_last = ha["HA_Open"].iloc[-1]
+    ha_close_last = ha["HA_Close"].iloc[-1]
+
+    price_color = "#00E676" if ha_close_last >= ha_open_last else "#FF5252"
+
+    # ===== Angled price line (L-shape) =====
+    x_last = ha.index[-1]
+    x_label = ha.index[-1] + pd.Timedelta(days=0.7)
+
+    y_price = real_close
+
+    # ระยะหักมุม (เล็กน้อย)
+    x_mid = ha.index[-1] + pd.Timedelta(days=0.35)
+
+    # เส้นแนวนอนช่วงแรก
+    ax1.plot(
+        [x_last, x_mid],
+        [y_price, y_price],
+        color=price_color,
+        linewidth=1.2
+    )
+
+    # เส้นเฉียงไปยัง label
+    ax1.plot(
+        [x_mid, x_label],
+        [y_price, y_price],
+        color=price_color,
+        linewidth=1.2
+    )
+
+    ax1.text(
+        ha.index[-1] + pd.Timedelta(days=0.7),
+        #real_close,
+        label_y,
+        f"{real_close:.2f}",
+        #color="white",
+        color="black",
+        fontsize=7,
+        #fontweight="bold",
+        verticalalignment="center",
+        horizontalalignment="left",
+        bbox=dict(
+            facecolor=price_color,
+            edgecolor="none",
+            boxstyle="round,pad=0.3"
+        )
+    )
+
 
 
     ax1.plot(ema50, label=f"EMA50 {ema50_last:.2f}",
