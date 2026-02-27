@@ -1,4 +1,4 @@
-# =========================================================v.88=
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import os
@@ -481,9 +481,9 @@ def pro_investor_thesis(price, ema50, ema100, ema200, rsi, slope200, macd, signa
 def _format_sr_for_prompt(supports, resistances):
     lines = []
     if supports:
-        lines.append("Supports: " + ", ".join(f"{s['mid']:.2f}" for s in supports))
+        lines.append("Supports: " + ", ".join(f"{s['mid']:.0f}" for s in supports))
     if resistances:
-        lines.append("Resistances: " + ", ".join(f"{r['mid']:.2f}" for r in resistances))
+        lines.append("Resistances: " + ", ".join(f"{r['mid']:.0f}" for r in resistances))
     return "\n".join(lines)
 
 
@@ -499,7 +499,7 @@ Stock: {symbol}
 Price: {price:.2f}
 
 Market structure:
-EMA levels: {ema50:.2f}, {ema100:.2f}, {ema200:.2f}
+EMA levels: {ema50:.0f}, {ema100:.0f}, {ema200:.0f}
 
 Momentum context:
 RSI {rsi:.2f}
