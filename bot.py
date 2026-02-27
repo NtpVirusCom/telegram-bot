@@ -1,4 +1,4 @@
-# ========================================================== v.75
+# =========================================================v.88=
 # Imports & Config
 # ==========================================================
 import os
@@ -11,7 +11,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
 
-
+# ==========================================================
+# MODIFY MENU
+# ==========================================================
 def main_menu_keyboard():
     keyboard = [
         [
@@ -22,6 +24,9 @@ def main_menu_keyboard():
             InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
             InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
+        #[
+        #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
+        #],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
         ],
@@ -191,6 +196,67 @@ def calculate_macd(close):
     hist = macd - signal
 
     return macd, signal, hist
+
+
+
+# ==========================================================
+# ADD: Impulse MACD (LazyBear)
+# ==========================================================
+def calculate_impulse_macd(df: pd.DataFrame):
+    high = df["High"]
+    low = df["Low"]
+    close = df["Close"]
+
+    # ===== Mean =====
+    mean = (high + low + close) / 3
+
+    period = 34
+    alpha = 2 / (period + 1)
+
+    # ===== SMMA =====
+    smma_high = high.copy()
+    smma_low = low.copy()
+
+    for i in range(len(df)):
+        if i == 0:
+            smma_high.iloc[i] = high.iloc[i]
+            smma_low.iloc[i] = low.iloc[i]
+        else:
+            smma_high.iloc[i] = (smma_high.iloc[i-1] * (period - 1) + high.iloc[i]) / period
+            smma_low.iloc[i] = (smma_low.iloc[i-1] * (period - 1) + low.iloc[i]) / period
+
+    # ===== ZLEMA =====
+    ema1 = mean.copy()
+    ema2 = mean.copy()
+
+    for i in range(len(df)):
+        if i == 0:
+            ema1.iloc[i] = mean.iloc[i]
+            ema2.iloc[i] = mean.iloc[i]
+        else:
+            ema1.iloc[i] = (mean.iloc[i] * alpha) + (ema1.iloc[i-1] * (1 - alpha))
+            ema2.iloc[i] = (ema1.iloc[i] * alpha) + (ema2.iloc[i-1] * (1 - alpha))
+
+    zlema = ema1 + (ema1 - ema2)
+
+    # ===== MD =====
+    md = pd.Series(index=df.index, dtype=float)
+
+    for i in range(len(df)):
+        if zlema.iloc[i] > smma_high.iloc[i]:
+            md.iloc[i] = zlema.iloc[i] - smma_high.iloc[i]
+        elif zlema.iloc[i] < smma_low.iloc[i]:
+            md.iloc[i] = zlema.iloc[i] - smma_low.iloc[i]
+        else:
+            md.iloc[i] = 0
+
+    # ===== SB =====
+    sb = md.rolling(window=9).mean()
+
+    # ===== SH =====
+    sh = md - sb
+
+    return md, sb, sh
 
 
 def ema_slope(series, period: int = 10):
@@ -665,6 +731,15 @@ def plot_technical_chart(symbol: str):
     # แสดงเฉพาะ 1 เดือนล่าสุด
     data_1m = data_3y.tail(21)
 
+    # =========================
+    # Impulse MACD
+    # =========================
+    md_full, sb_full, sh_full = calculate_impulse_macd(data_3y)
+
+    md = md_full.loc[data_1m.index]
+    sb = sb_full.loc[data_1m.index]
+    sh = sh_full.loc[data_1m.index]
+
     # ===== Heikin Ashi =====
     ha = calculate_heikin_ashi(data_1m)
 
@@ -681,11 +756,11 @@ def plot_technical_chart(symbol: str):
     # =====================
     # Plot
     # =====================
-    fig, (ax1, ax2, ax3) = plt.subplots(
-        3, 1,
-        figsize=(10, 10),
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(
+        4, 1,
+        figsize=(10, 12),
         sharex=True,
-        gridspec_kw={"height_ratios": [3, 1, 1.5]}
+        gridspec_kw={"height_ratios": [3, 1, 1, 1.5]}
     )
 
     # Price + EMA
@@ -996,6 +1071,47 @@ def plot_technical_chart(symbol: str):
     ax2.grid(True)
 
 
+    # =====================================
+    # Impulse MACD (แทรกระหว่าง MACD กับ RSI)
+    # =====================================
+
+    impulse_colors = []
+    for i in range(len(sh)):
+        if sh.iloc[i] > 0:
+            impulse_colors.append("#00E676")
+        elif sh.iloc[i] < 0:
+            impulse_colors.append("#FF5252")
+        else:
+            impulse_colors.append("#9E9E9E")
+
+    # Histogram
+    ax3.bar(
+        sh.index,
+        sh,
+        color=impulse_colors,
+        alpha=0.9,
+        label=f"Impulse Histo {sh.iloc[-1]:+.3f}"
+    )
+
+    # MD + Signal
+    #ax3.plot(md, label=f"MD {md.iloc[-1]:.3f}", linewidth=1.4)
+    ax3.plot(md, color="#00B0FF", linewidth=1.6, label=f"MD {md.iloc[-1]:.3f}")
+    #ax3.plot(sb, label=f"Signal (SB) {sb.iloc[-1]:.3f}", linestyle="--", linewidth=1.2)
+    ax3.plot(sb, color="white", linestyle="--", linewidth=1.2, label=f"Signal (SB) {sb.iloc[-1]:.3f}")
+
+    ax3.axhline(0, linewidth=1)
+
+    legend_imp = ax3.legend(loc="upper left", fontsize=9, frameon=True)
+
+    legend_imp.get_frame().set_facecolor("#1c2128")
+    legend_imp.get_frame().set_edgecolor("#2a2e39")
+    legend_imp.get_frame().set_alpha(0.9)
+    legend_imp.get_frame().set_linewidth(0.8)
+
+    ax3.set_title("Impulse MACD (ZLEMA)", loc="left", fontsize=10)
+    ax3.grid(True)
+
+
     # RSI
     #ax3.plot(rsi, label="RSI")
     #ax3.plot(rsi, label=f"RSI: {rsi_last:.2f}")
@@ -1005,13 +1121,13 @@ def plot_technical_chart(symbol: str):
     #ax3.legend()
     #ax3.grid(True)
 
-    ax3.plot(rsi, label=f"RSI {rsi_last:.2f}",
+    ax4.plot(rsi, label=f"RSI {rsi_last:.2f}",
          color="#AB47BC", linewidth=1.4)
 
-    ax3.axhline(70, color="#FF5252", linestyle="--", alpha=0.5)
-    ax3.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
+    ax4.axhline(70, color="#FF5252", linestyle="--", alpha=0.5)
+    ax4.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
 
-    ax3.set_ylim(0, 100)
+    ax4.set_ylim(0, 100)
 
     #legend1 = ax3.legend(
     #    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
@@ -1019,17 +1135,17 @@ def plot_technical_chart(symbol: str):
     #    fontsize=9
     #)
 
-    legend3 = ax3.legend(
+    legend4 = ax4.legend(
         loc="upper left",
         fontsize=9,
         frameon=True
     )
 
-    legend3.get_frame().set_facecolor("#1c2128")
-    legend3.get_frame().set_edgecolor("#2a2e39")
-    legend3.get_frame().set_alpha(0.9)
-    legend3.get_frame().set_linewidth(0.8)
-    legend3.get_frame().set_boxstyle("round,pad=0.4")
+    legend4.get_frame().set_facecolor("#1c2128")
+    legend4.get_frame().set_edgecolor("#2a2e39")
+    legend4.get_frame().set_alpha(0.9)
+    legend4.get_frame().set_linewidth(0.8)
+    legend4.get_frame().set_boxstyle("round,pad=0.4")
 
 
     #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
@@ -1037,7 +1153,7 @@ def plot_technical_chart(symbol: str):
 
 
     #ax3.legend(loc="upper left")
-    ax3.grid(True)
+    ax4.grid(True)
 
 
     buf = io.BytesIO()
@@ -1048,8 +1164,76 @@ def plot_technical_chart(symbol: str):
 
     return buf
 
+    
 
 
+def plot_impulse_chart(symbol: str):
+    apply_tv_style()
+
+    data = yf.Ticker(symbol).history(period="6mo")
+
+    if data.empty or len(data) < 50:
+        raise ValueError("NOT_ENOUGH_DATA")
+
+    # ใช้ 1 เดือนล่าสุด
+    data_1m = data.tail(21)
+
+    md, sb, sh = calculate_impulse_macd(data)
+
+    md = md.loc[data_1m.index]
+    sb = sb.loc[data_1m.index]
+    sh = sh.loc[data_1m.index]
+
+    close = data["Close"].loc[data_1m.index]
+
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1,
+        figsize=(10, 8),
+        sharex=True,
+        gridspec_kw={"height_ratios": [2, 1]}
+    )
+
+    # ===== PRICE =====
+    ax1.plot(close, color="white", linewidth=1.5, label="Price")
+    ax1.set_title(f"{symbol} — Impulse MACD")
+    ax1.legend(loc="upper left")
+    ax1.grid(True)
+
+    # ===== HISTO COLORS =====
+    colors = []
+    for i in range(len(sh)):
+        #if sh.iloc[i] > 0:
+        #    colors.append("#00E676")
+        #elif sh.iloc[i] < 0:
+        #    colors.append("#FF5252")
+        #else:
+        #    colors.append("#9E9E9E")
+        if sh.iloc[i] > 0:
+            impulse_colors.append("#00FF7F")  # เขียวสด
+        elif sh.iloc[i] < 0:
+            impulse_colors.append("#FF3B3B")  # แดงสด
+
+    # ===== HISTOGRAM =====
+    ax2.bar(sh.index, sh, color=colors, alpha=0.9, label="Impulse Histo")
+
+    # ===== LINES =====
+    ax2.plot(md, label="MD", linewidth=1.5)
+    ax2.plot(sb, label="Signal (SB)", linestyle="--", linewidth=1.2)
+
+    ax2.axhline(0, linewidth=1)
+
+    ax2.set_title("Impulse MACD (ZLEMA)")
+    ax2.legend(loc="upper left")
+    ax2.grid(True)
+
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+
+    return buf
+    
 
 # ==========================================================
 # Telegram Handlers
@@ -1065,6 +1249,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ==========================================================
+# CALLBACK MENU
+# ==========================================================
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1081,11 +1268,15 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "menu_sr":
         context.user_data["mode"] = "sr"
-        await query.message.reply_text("📐 พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
+        await query.message.reply_text("📐 พิมพ์สัญลักษณ์หุ้น เช่น `NVDA`")
 
     elif data == "menu_ch":
         context.user_data["mode"] = "ch"
-        await query.message.reply_text("📈 พิมพ์สัญลักษณ์หุ้น เช่น `NVDA`")
+        await query.message.reply_text("📈 พิมพ์สัญลักษณ์หุ้น เช่น `PLTR`")
+
+    elif data == "menu_impulse":
+        context.user_data["mode"] = "impulse"
+        await query.message.reply_text("⚡ พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -1119,7 +1310,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_ch(query, context)
 
 
-
+# ==========================================================
+# TEXT ROUTER (เพิ่ม impulse)
+# ==========================================================
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get("mode")
     if not mode:
@@ -1136,6 +1329,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_sr(update, context)
     elif mode == "ch":
         await cmd_ch(update, context)
+
 
 
 
@@ -1340,6 +1534,107 @@ async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def count_green_streak(sh_series: pd.Series) -> int:
+    streak = 0
+    for val in reversed(sh_series):
+        if val > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+#def get_sp500_symbols():
+#    table = pd.read_html(
+#        "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+#    )
+#    symbols = table[0]["Symbol"].tolist()
+#
+#    # แก้ BRK.B → BRK-B format สำหรับ yfinance
+#    symbols = [s.replace(".", "-") for s in symbols]
+#    return symbols
+def get_sp500_symbols():
+    return [
+        "AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","BRK-B","LLY","AVGO",
+        "JPM","TSLA","V","UNH","XOM","MA","HD","PG","COST","MRK",
+        "ABBV","PEP","KO","CVX","ADBE","AMD","WMT","NFLX","TMO","ACN",
+        "LIN","MCD","DIS","DHR","TXN","INTC","NEE","PM","UNP","HON",
+        "QCOM","IBM","LOW","AMGN","SPGI","CAT","GS","RTX","PLD","NOW"
+    ]
+
+def scan_impulse_green_streak(
+    symbols: list,
+    min_streak: int = 3,
+    lookback_months: int = 3
+):
+    results = []
+
+    for symbol in symbols:
+        try:
+            data = yf.Ticker(symbol).history(
+                period=f"{lookback_months}mo"
+            )
+
+            if data.empty or len(data) < 50:
+                continue
+
+            md, sb, sh = calculate_impulse_macd(data)
+
+            streak = count_green_streak(sh.dropna())
+
+            if streak >= min_streak:
+                results.append({
+                    "symbol": symbol,
+                    "streak": streak,
+                    "price": data["Close"].iloc[-1]
+                })
+
+        except:
+            continue
+
+    # เรียงจาก streak มาก → น้อย
+    results = sorted(results, key=lambda x: x["streak"], reverse=True)
+
+    return results
+
+
+async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text("🔍 กำลังสแกนตลาด... กรุณารอ")
+
+    try:
+        symbols = get_sp500_symbols()
+
+        results = scan_impulse_green_streak(
+            symbols,
+            min_streak=3
+        )
+
+        if not results:
+            await update.message.reply_text(
+                "❌ ไม่พบหุ้นที่เป็น GREEN streak"
+            )
+            return
+
+        text = "🚀 Impulse GREEN Streak\n\n"
+
+        for r in results[:15]:  # แสดง 15 ตัวแรก
+            text += (
+                f"🟢 {r['symbol']}  "
+                f"| {r['streak']} วัน "
+                f"| ${r['price']:.2f}\n"
+            )
+
+        await update.message.reply_text(text)
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ scan error: {str(e)}")
+
+
+
+
+
+
 # ==========================================================
 # App Bootstrap
 # ==========================================================
@@ -1348,6 +1643,10 @@ logging.basicConfig(
     format="%(asctime)s - %(message)s"
 )
 
+
+# ==========================================================
+# REGISTER HANDLER (เพิ่มบรรทัดนี้)
+# ==========================================================
 def main():
     logging.info("Pro Investor AI Stock Bot Started")
 
@@ -1363,6 +1662,8 @@ def main():
     app.add_handler(CommandHandler("ai", cmd_ai))
     app.add_handler(CommandHandler("sr", cmd_sr))
     app.add_handler(CommandHandler("ch", cmd_ch))
+
+    app.add_handler(CommandHandler("scan", cmd_scan))
 
     app.run_polling()
 
