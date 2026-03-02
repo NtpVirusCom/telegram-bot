@@ -1,4 +1,4 @@
-# ========================================================v.88==
+# ========================================================v.96==
 # Imports & Config
 # ==========================================================
 import os
@@ -6,6 +6,7 @@ import logging
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
+import math
 import io
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
@@ -23,6 +24,10 @@ def main_menu_keyboard():
         [
             InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
             InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
+        ],
+        [
+            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
@@ -47,6 +52,10 @@ def post_result_keyboard(symbol: str):
             InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
             #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
+        ],
+        [
+            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -118,6 +127,11 @@ HELP_TEXT = """
 • มุมมองเชิงกลยุทธ์แบบนักลงทุนสถาบัน
 • สรุป Risk / Opportunity / Action bias
 
+/im1
+• Scan Impulse GREEN 1–2 วัน
+
+/im2
+• Scan Impulse GREEN ≥ 3 วัน
 ━━━━━━━━━━
 🟡 DETAIL (coming / optional)
 ━━━━━━━━━━
@@ -1278,6 +1292,22 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "impulse"
         await query.message.reply_text("⚡ พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
 
+    elif data == "menu_im1":
+        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+        symbols = get_all_symbols()
+        context.user_data["mode"] = "im1"        
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
+        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+    elif data == "menu_im2":
+        await query.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+        symbols = get_all_symbols()
+        context.user_data["mode"] = "im2"
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
+        await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
 
@@ -1329,6 +1359,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_sr(update, context)
     elif mode == "ch":
         await cmd_ch(update, context)
+    elif mode == "im1":
+        await cmd_im1(update, context)
+    elif mode == "im2":
+        await cmd_im2(update, context)
 
 
 
@@ -1399,6 +1433,7 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
 
     try:
         d = analyze(symbol)
@@ -1446,6 +1481,7 @@ async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
 
     try:
         data_1y = yf.Ticker(symbol).history(period="1y")
@@ -1519,6 +1555,7 @@ async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
 
     try:
         chart = plot_technical_chart(symbol)
@@ -1534,9 +1571,28 @@ async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ==========================================================
+# IMACD SCAN COMMANDS (/im1 /im2)
+# ==========================================================
+
+async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+
+async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
-    for val in reversed(sh_series):
+    #for val in reversed(sh_series):
+    for val in sh_series.iloc[::-1]:
         if val > 0:
             streak += 1
         else:
@@ -1553,19 +1609,55 @@ def count_green_streak(sh_series: pd.Series) -> int:
 #    # แก้ BRK.B → BRK-B format สำหรับ yfinance
 #    symbols = [s.replace(".", "-") for s in symbols]
 #    return symbols
+
+
 def get_sp500_symbols():
-    return [
-        "AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","BRK-B","LLY","AVGO",
-        "JPM","TSLA","V","UNH","XOM","MA","HD","PG","COST","MRK",
-        "ABBV","PEP","KO","CVX","ADBE","AMD","WMT","NFLX","TMO","ACN",
-        "LIN","MCD","DIS","DHR","TXN","INTC","NEE","PM","UNP","HON",
-        "QCOM","IBM","LOW","AMGN","SPGI","CAT","GS","RTX","PLD","NOW"
-    ]
+    import pandas as pd
+
+    url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+    df = pd.read_csv(url)
+
+    symbols = df["Symbol"].dropna().tolist()
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    return symbols
+
+
+def get_nasdaq100_symbols():
+    import pandas as pd
+
+    url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    df = pd.read_csv(url)
+
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Symbol"].dropna().tolist()
+
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    return symbols[:100]
+
+
+def get_all_symbols():
+    """
+    รวมสองตลาด + ลบตัวซ้ำ
+    """
+    sp500 = get_sp500_symbols()
+    nasdaq = get_nasdaq100_symbols()
+
+    symbols = list(set(sp500 + nasdaq))
+
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+    print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+
+    return symbols
+
 
 def scan_impulse_green_streak(
     symbols: list,
     min_streak: int = 3,
-    lookback_months: int = 3
+    lookback_months: int = 3,
+    mode: str = "above"  # "above" หรือ "below"
 ):
     results = []
 
@@ -1582,7 +1674,11 @@ def scan_impulse_green_streak(
 
             streak = count_green_streak(sh.dropna())
 
-            if streak >= min_streak:
+            # ✅ เงื่อนไขใหม่
+            if (mode == "above" and streak >= min_streak) or \
+               (mode == "below" and 1 <= streak < min_streak):
+
+
                 results.append({
                     "symbol": symbol,
                     "streak": streak,
@@ -1592,43 +1688,101 @@ def scan_impulse_green_streak(
         except:
             continue
 
-    # เรียงจาก streak มาก → น้อย
-    results = sorted(results, key=lambda x: x["streak"], reverse=True)
+    # 🔽 เรียงน้อย → มาก
+    results = sorted(results, key=lambda x: x["streak"])
 
     return results
 
 
-async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
-    await update.message.reply_text("🔍 กำลังสแกนตลาด... กรุณารอ")
+
+
+    # 🔥 STEP A: โหลด symbols
+    #symbols = get_all_symbols()
+
+    # 🔥 STEP B: print ตรงนี้ (จะทำงานแน่นอน)
+    #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+
+    # 🔥 STEP C: เอาไปใช้ scan
+    #results = scan_impulse_green_streak(symbols)
+
+
+
+    # ✅ แยก message กับ callback ให้ชัด
+    if hasattr(update_or_query, "message"):  
+        # มาจาก callback_query
+        msg = update_or_query.message
+    else:
+        # มาจาก update.message
+        msg = update_or_query.message
+
+    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
 
     try:
-        symbols = get_sp500_symbols()
-
         results = scan_impulse_green_streak(
             symbols,
-            min_streak=3
+            min_streak=min_streak,
+            mode=mode
         )
 
         if not results:
-            await update.message.reply_text(
-                "❌ ไม่พบหุ้นที่เป็น GREEN streak"
-            )
+            await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
 
-        text = "🚀 Impulse GREEN Streak\n\n"
+        import math
 
-        for r in results[:15]:  # แสดง 15 ตัวแรก
-            text += (
-                f"🟢 {r['symbol']}  "
-                f"| {r['streak']} วัน "
-                f"| ${r['price']:.2f}\n"
-            )
+        chunk_size = 20
+        total_items = len(results)
+        total_pages = math.ceil(total_items / chunk_size)
 
-        await update.message.reply_text(text)
+        for page in range(total_pages):
+            start = page * chunk_size
+            end = start + chunk_size
+            chunk = results[start:end]
+
+            text = f"{title} ({page+1}/{total_pages})\n"
+
+            if page == 0:
+                text += f"จำนวนทั้งหมด {total_items} หุ้น\n"
+
+            text += "\n"
+
+            for r in chunk:
+                text += (
+                    f"🟢 {r['symbol']}  "
+                    f"| {r['streak']} วัน "
+                    f"| ${r['price']:.2f}\n"
+                )
+
+            # ✅ เฉพาะหน้าสุดท้าย ใส่เมนู
+            if page == total_pages - 1:
+                await msg.reply_text(
+                    text,
+                    reply_markup=main_menu_keyboard()
+                )
+            else:
+                await msg.reply_text(text)
+
 
     except Exception as e:
-        await update.message.reply_text(f"❌ scan error: {str(e)}")
+        await msg.reply_text(f"❌ scan error: {str(e)}")
+
+
+#async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    symbols = get_all_symbols()
+#    #await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+#    await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+
+#async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    symbols = get_all_symbols()
+#    #await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+#    await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
+
 
 
 
@@ -1663,7 +1817,11 @@ def main():
     app.add_handler(CommandHandler("sr", cmd_sr))
     app.add_handler(CommandHandler("ch", cmd_ch))
 
-    app.add_handler(CommandHandler("scan", cmd_scan))
+    #app.add_handler(CommandHandler("scan", cmd_scan))
+    app.add_handler(CommandHandler("im1", cmd_im1))
+    app.add_handler(CommandHandler("im2", cmd_im2))
+
+    #app.add_handler(CommandHandler("scanmenu", cmd_scanmenu))
 
     app.run_polling()
 
