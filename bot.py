@@ -1,4 +1,4 @@
-# ========================================================v.96==
+# ========================================================v.121==
 # Imports & Config
 # ==========================================================
 import os
@@ -29,6 +29,15 @@ def main_menu_keyboard():
             InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
             InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
+        [
+            InlineKeyboardButton("📊 Mansfield RS", callback_data="menu_man"),
+        ],
+        [
+            InlineKeyboardButton("📊 Stage Analysis", callback_data="menu_stage"),
+        ],
+        [
+            InlineKeyboardButton("🚀 Stage 2 Scan", callback_data="menu_stage_scan"),
+        ],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
         #],
@@ -56,6 +65,12 @@ def post_result_keyboard(symbol: str):
         [
             InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
             InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+        ],
+        [
+            InlineKeyboardButton("📊 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
+        ],
+        [
+            InlineKeyboardButton("📊 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -212,6 +227,193 @@ def calculate_macd(close):
     return macd, signal, hist
 
 
+# ==========================================================
+# Mansfield RS (StageAnalysis - Weekly, Unflattened)
+# ==========================================================
+def calculate_mansfield_rs(symbol: str, benchmark: str = "^GSPC", ma_length: int = 52):
+    """
+    Pine reference:
+    stockDividedBySpx = stock / spx * 100
+    zeroLine = ta.sma(stockDividedBySpx, maLength)
+
+    Weekly resolution
+    """
+
+    # ดึงข้อมูลแบบ Weekly
+    stock = yf.Ticker(symbol).history(period="3y", interval="1wk")
+    index = yf.Ticker(benchmark).history(period="3y", interval="1wk")
+
+    if stock.empty or index.empty:
+        raise ValueError("NOT_ENOUGH_DATA")
+
+    df = pd.DataFrame({
+        "stock": stock["Close"],
+        "index": index["Close"]
+    }).dropna()
+
+    # RS Line (เหมือน Pine)
+    df["rs"] = df["stock"] / df["index"] * 100
+
+    # MA 52 สัปดาห์
+    df["rs_ma"] = df["rs"].rolling(ma_length).mean()
+
+    return df.tail(104)  # ~2 ปีล่าสุด
+
+
+# ==========================================================
+# SATA CALCULATION (Stage Analysis Technical Attributes)
+# ==========================================================
+def calculate_sata(symbol: str):
+
+    stock = yf.Ticker(symbol).history(period="3y", interval="1wk")
+    benchmark = yf.Ticker("^GSPC").history(period="3y", interval="1wk")
+
+    df = pd.DataFrame({
+        "Close": stock["Close"],
+        "High": stock["High"],
+        "Low": stock["Low"],
+        "Volume": stock["Volume"],
+        "Index": benchmark["Close"]
+    }).dropna()
+
+    # ===============================
+    # Moving Averages
+    # ===============================
+    df["ma10"] = df["Close"].rolling(10).mean()
+    df["ma30"] = df["Close"].rolling(30).mean()
+    df["ma40"] = df["Close"].rolling(40).mean()
+
+    df["ma10_slope"] = df["ma10"].diff()
+    df["ma30_slope"] = df["ma30"].diff()
+    df["ma40_slope"] = df["ma40"].diff()
+
+    # ===============================
+    # Mansfield RS
+    # ===============================
+    rs = df["Close"] / df["Index"]
+    rs_ma = rs.rolling(52).mean()
+    mansfield = ((rs / rs_ma) - 1) * 100
+    rs_slope = mansfield.diff()
+
+    # ===============================
+    # Volume MA
+    # ===============================
+    df["vol_ma"] = df["Volume"].rolling(10).mean()
+
+    # ===============================
+    # SATA-10 Attributes
+    # ===============================
+    sata = pd.DataFrame(index=df.index)
+
+    # 1 Price > 30W
+    sata["a1"] = (df["Close"] > df["ma30"]).astype(int)
+
+    # 2 30W MA Rising
+    sata["a2"] = (df["ma30_slope"] > 0).astype(int)
+
+    # 3 Price > 40W
+    sata["a3"] = (df["Close"] > df["ma40"]).astype(int)
+
+    # 4 40W MA Rising
+    sata["a4"] = (df["ma40_slope"] > 0).astype(int)
+
+    # 5 10W > 30W
+    sata["a5"] = (df["ma10"] > df["ma30"]).astype(int)
+
+    # 6 10W Rising
+    sata["a6"] = (df["ma10_slope"] > 0).astype(int)
+
+    # 7 Mansfield > 0
+    sata["a7"] = (mansfield > 0).astype(int)
+
+    # 8 RS Rising
+    sata["a8"] = (rs_slope > 0).astype(int)
+
+    # 9 Higher High
+    sata["a9"] = (df["High"] > df["High"].shift(1)).astype(int)
+
+    # 10 Volume Confirmation
+    sata["a10"] = (df["Volume"] > df["vol_ma"]).astype(int)
+
+    # ===============================
+    # Final Score
+    # ===============================
+    sata["score"] = sata.sum(axis=1)
+
+    #return df, sata
+    return df, sata, rs
+
+
+def detect_stage_pro(df, sata):
+
+    df = df.copy()
+
+    # ===== 40W MA Slope =====
+    df["ma40"] = df["Close"].rolling(40).mean()
+    df["ma40_slope"] = df["ma40"].diff()
+
+    latest = df.iloc[-1]
+
+    stage = "Unknown"
+
+    # =========================
+    # Stage 2
+    # =========================
+    if latest["Close"] > latest["ma40"] and latest["ma40_slope"] > 0:
+        stage = "Stage 2"
+
+    # =========================
+    # Stage 4
+    # =========================
+    elif latest["Close"] < latest["ma40"] and latest["ma40_slope"] < 0:
+        stage = "Stage 4"
+
+    # =========================
+    # Stage 1
+    # =========================
+    elif abs(latest["ma40_slope"]) < 0.01:
+        stage = "Stage 1"
+
+    # =========================
+    # Stage 3
+    # =========================
+    else:
+        stage = "Stage 3"
+
+    return stage
+
+
+def detect_base(df):
+
+    recent = df.tail(20)
+
+    high_range = recent["High"].max()
+    low_range = recent["Low"].min()
+
+    range_pct = (high_range - low_range) / low_range
+
+    # ถ้าแกว่งไม่เกิน 15% ถือเป็น Base
+    if range_pct < 0.15:
+        return True
+
+    return False
+
+
+def detect_breakout(df):
+
+    recent = df.tail(20)
+
+    resistance = recent["High"].max()
+    latest = df.iloc[-1]
+
+    if latest["Close"] > resistance:
+        return True
+
+    return False
+
+
+
+
 
 # ==========================================================
 # ADD: Impulse MACD (LazyBear)
@@ -271,6 +473,69 @@ def calculate_impulse_macd(df: pd.DataFrame):
     sh = md - sb
 
     return md, sb, sh
+
+# ===============================
+# 📊 MANSFIELD RELATIVE STRENGTH
+# ===============================
+
+#def calculate_mansfield_rs(symbol: str, benchmark="^GSPC"):
+#    stock = yf.Ticker(symbol).history(period="2y")
+#    index = yf.Ticker(benchmark).history(period="2y")
+#
+#    df = pd.DataFrame({
+#        "stock": stock["Close"],
+#        "index": index["Close"]
+#    }).dropna()
+#
+#    rs = df["stock"] / df["index"]
+#    rs_ma = rs.rolling(252).mean()  # 52 สัปดาห์
+#
+#    mansfield = ((rs / rs_ma) - 1) * 100
+#    return mansfield.tail(252)
+
+
+# ===============================
+# 📊 STAGE ANALYSIS ATTRIBUTES
+# ===============================
+
+def calculate_stage_attributes(symbol: str):
+    data = yf.Ticker(symbol).history(period="2y")
+
+    close = data["Close"]
+
+    ma30 = close.rolling(30).mean()
+    ma150 = close.rolling(150).mean()
+    ma200 = close.rolling(200).mean()
+
+    mansfield = calculate_mansfield_rs(symbol)
+
+    price = close.iloc[-1]
+    high_52w = close.tail(252).max()
+
+    slope200 = ma200.diff(20)
+
+    stage = "Stage 1 / Base"
+
+    if (
+        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
+        and slope200.iloc[-1] > 0
+        and mansfield.iloc[-1] > 0
+        and price > 0.75 * high_52w
+    ):
+        stage = "Stage 2 – Uptrend"
+
+    elif price < ma200.iloc[-1]:
+        stage = "Stage 4 – Downtrend"
+
+    return {
+        "data": data.tail(252),
+        "ma30": ma30.tail(252),
+        "ma150": ma150.tail(252),
+        "ma200": ma200.tail(252),
+        "mansfield": mansfield,
+        "stage": stage
+    }
+
 
 
 def ema_slope(series, period: int = 10):
@@ -1249,6 +1514,239 @@ def plot_impulse_chart(symbol: str):
     return buf
     
 
+
+
+
+# ===============================
+# 📊 STAGE ANALYSIS PLOT
+# ===============================
+
+#def plot_stage_analysis(symbol: str):
+#    apply_tv_style()
+
+#    d = calculate_stage_attributes(symbol)
+#
+#    data = d["data"]
+#    ma30 = d["ma30"]
+#    ma150 = d["ma150"]
+#    ma200 = d["ma200"]
+#    mansfield = d["mansfield"]
+#
+#    # ===== จำกัดช่วงเวลาแสดงผลย้อนหลัง 1 ปี =====
+#    end_date = data.index.max()
+#    start_date = end_date - pd.DateOffset(years=1)
+#
+#    data = data[data.index >= start_date]
+#    ma30 = ma30[ma30.index >= start_date]
+#    ma150 = ma150[ma150.index >= start_date]
+#    ma200 = ma200[ma200.index >= start_date]
+#    mansfield = mansfield[mansfield.index >= start_date]
+#
+#    fig, (ax1, ax2) = plt.subplots(
+#        2, 1,
+#        figsize=(14, 8),
+#        sharex=True,
+#        gridspec_kw={
+#            "height_ratios": [2.2, 1],
+#            "hspace": 0.05
+#        }
+#    )
+#
+#    # ===== Figure Title =====
+#    fig.suptitle(
+#        f"{symbol} — Stage Analysis",
+#        fontsize=16,
+#        fontweight="bold",
+#        x=0.06,
+#        ha="left"
+#    )
+#
+#    # ===== PRICE PANEL =====
+#    ax1.plot(data["Close"], linewidth=1.6, label="Price")
+#    ax1.plot(ma30, label="MA30")
+#    ax1.plot(ma150, label="MA150")
+#    ax1.plot(ma200, label="MA200")
+#
+#    ax1.set_title(f"{symbol} — {d['stage']}", loc="left")
+#    ax1.legend(loc="upper left")
+#    ax1.grid(True)
+#
+#    # ===== RS PANEL =====
+#    ax2.plot(mansfield, linewidth=1.5, label="Mansfield RS")
+#    ax2.axhline(0, linestyle="--", alpha=0.6)
+#
+#    ax2.set_title("Relative Strength (Mansfield)")
+#    ax2.legend(loc="upper left")
+#    ax2.grid(True)
+#
+#    buf = io.BytesIO()
+#    plt.tight_layout()
+#    plt.savefig(buf, format="png")
+#    plt.close(fig)
+#    buf.seek(0)
+#
+#    return buf
+
+
+# ==========================================================
+# Stage Analysis - Mansfield RS Plot
+# ==========================================================
+def plot_stage_rs(symbol: str):
+    apply_tv_style()
+
+    df = calculate_mansfield_rs(symbol)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # RS Line (black in Pine → white here for dark bg)
+    ax.plot(df.index, df["rs"], color="white", linewidth=1.5, label="Stock / Index")
+
+    # MA Line (blue)
+    ax.plot(df.index, df["rs_ma"], color="#2962FF", linewidth=1.2, label="MA 52W")
+
+    ax.set_title(f"{symbol} — Mansfield RS (Weekly)", loc="left")
+    ax.legend(loc="upper left")
+    ax.grid(True)
+
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+
+    return buf
+
+
+# ==========================================================
+# SATA PLOT
+# ==========================================================
+def plot_sata(symbol: str):
+    apply_tv_style()
+
+    rs_df = calculate_mansfield_rs(symbol)
+    #df, sata = calculate_sata(symbol)
+    df, sata, rs = calculate_sata(symbol)
+
+    latest_score = int(sata["score"].iloc[-1])
+
+    stage_label = detect_stage_pro(df, sata)
+    is_base = detect_base(df)
+    is_breakout = detect_breakout(df)
+
+    latest_score = sata["score"].iloc[-1]
+
+
+    # ===============================
+    # ADVANCED PRO+ LOGIC
+    # ===============================
+
+    volume_contraction = detect_volume_contraction(df)
+
+    base_high = df["High"].rolling(30).max().iloc[-2]
+    breakout = df["Close"].iloc[-1] > base_high
+
+    breakout_volume = detect_breakout_volume(df, base_high)
+
+    rs_new_high = detect_rs_new_high(rs)
+
+    stage_transition = detect_stage_transition(df)
+
+    strong_stage2 = detect_strong_stage2(latest_score, breakout_volume)
+    #strong_stage2 = detect_strong_stage2(latest_score, is_breakout)
+
+
+    # ===== จำกัดช่วงเวลาแสดงผลย้อนหลัง 1 ปี =====
+    end_date = rs_df.index.max()
+    start_date = end_date - pd.DateOffset(years=1)
+
+    rs_df = rs_df[rs_df.index >= start_date]
+    sata = sata[sata.index >= start_date]
+
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1,
+        figsize=(12, 7),
+        sharex=True,
+        gridspec_kw={"height_ratios": [2, 1]}
+    )
+
+    # ===== MAIN TITLE =====
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+    left = fig.subplotpars.left
+
+    fig.text(
+        left,
+        0.98,
+        f"{symbol} — Stage Analysis",
+        ha="left",
+        va="top",
+        fontsize=16,
+        fontweight="bold",
+        color="white"
+    )
+
+
+    # ===== Panel 1: Mansfield RS =====
+    ax1.plot(rs_df.index, rs_df["rs"], color="#00E5FF", linewidth=1.8)
+    ax1.plot(rs_df.index, rs_df["rs_ma"], linestyle="--", color="#9E9E9E", linewidth=1.4, alpha=0.8)
+
+    # RS BASELINE (StageAnalysis style)
+    ax1.axhline(0, color="#607D8B", linestyle="--", linewidth=1)
+
+    # ===== AUTO SCALE RS =====
+    rs_min = min(rs_df["rs"].min(), rs_df["rs_ma"].min())
+    rs_max = max(rs_df["rs"].max(), rs_df["rs_ma"].max())
+
+    padding = (rs_max - rs_min) * 0.15
+    ax1.set_ylim(rs_min - padding, rs_max + padding)
+
+    ax1.margins(x=0)
+
+    ax1.set_ylabel("RS Value")
+
+    ax1.axhline(0, linestyle="--", alpha=0.5)
+    #ax1.set_title("Mansfield Relative Strength", loc="left", fontsize=11, fontweight="bold")
+    ax1.set_title("Mansfield Relative Strength", loc="left", fontsize=11)
+    ax1.grid(True)
+
+    # ===== Panel 2: SATA Score =====
+    ax2.plot(sata.index, sata["score"], color="#FFD700", linewidth=1.6)
+
+    ax2.axhline(6, linestyle="--", color="#00E676", linewidth=1)
+    ax2.axhline(3, linestyle="--", color="#FF5252", linewidth=1)
+
+    ax2.set_ylabel("Score")
+
+    ax2.set_ylim(0, 10)
+    #ax2.set_title("SATA Score", loc="left", fontsize=11, fontweight="bold")
+    ax2.set_title("SATA Score", loc="left", fontsize=11)
+    ax2.grid(True)
+
+
+    # COMMON STYLE
+    for ax in [ax1, ax2]:
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.35)
+
+        # remove side padding (กราฟชิดขอบ)
+        ax.margins(x=0)
+
+
+    # EXPORT PNG (Telegram optimized)
+    buf = io.BytesIO()
+    #plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+
+    return buf
+
+
+
 # ==========================================================
 # Telegram Handlers
 # ==========================================================
@@ -1262,6 +1760,29 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_keyboard()
     )
 
+
+# ===============================
+# 📊 TELEGRAM STAGE COMMAND
+# ===============================
+
+#async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    if not context.args:
+#        await update.message.reply_text("กรุณาพิมพ์ชื่อหุ้น เช่น AAPL")
+#        return
+#
+#    symbol = context.args[0].upper()
+#    context.user_data["last_symbol"] = symbol
+#
+#    try:
+#        buf = plot_stage_analysis(symbol)
+#    except Exception:
+#        await update.message.reply_text("❌ ไม่พบข้อมูลหุ้นนี้")
+#        return
+#
+#    await update.message.reply_photo(
+#        photo=buf,
+#        reply_markup=post_result_keyboard(symbol)
+#    )
 
 # ==========================================================
 # CALLBACK MENU
@@ -1308,6 +1829,23 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         #print(f"Loaded symbols: {len(symbols)} ตัว")
         await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
 
+
+
+    elif data == "menu_man":
+        context.user_data["mode"] = "man"
+        await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+    elif data == "menu_stage":
+        context.user_data["mode"] = "stage"
+        await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+
+    elif data == "menu_stage_scan":
+        symbols = get_all_symbols()
+        await run_stage_scan(query, symbols)
+
+
+
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
 
@@ -1339,6 +1877,17 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_ch(query, context)
 
+    elif data.startswith("again_man:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_man(query, context)
+
+    elif data.startswith("again_stage:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_stage(query, context)
+
+
 
 # ==========================================================
 # TEXT ROUTER (เพิ่ม impulse)
@@ -1363,6 +1912,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_im1(update, context)
     elif mode == "im2":
         await cmd_im2(update, context)
+
+    elif mode == "man":
+        await cmd_man(update, context)
+
+    elif mode == "stage":
+        await cmd_stage(update, context)
 
 
 
@@ -1570,6 +2125,135 @@ async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=post_result_keyboard(symbol)
     )
 
+async def cmd_man(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        chart = plot_stage_rs(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟ Stage RS ได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📊 {symbol} — Mansfield RS",
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+
+# ===============================
+# ADVANCED PRO+ DETECTION ENGINE
+# ===============================
+
+def detect_volume_contraction(df, lookback=20):
+    recent_vol = df["Volume"].tail(lookback)
+    return recent_vol.mean() < df["Volume"].rolling(50).mean().iloc[-1]
+
+
+def detect_breakout_volume(df, breakout_level):
+    latest_vol = df["Volume"].iloc[-1]
+    avg_vol = df["Volume"].rolling(50).mean().iloc[-1]
+    price_breakout = df["Close"].iloc[-1] > breakout_level
+    volume_expansion = latest_vol > avg_vol * 1.5
+    return price_breakout and volume_expansion
+
+
+def detect_rs_new_high(rs_series, lookback=60):
+    recent_high = rs_series.tail(lookback).max()
+    return rs_series.iloc[-1] >= recent_high
+
+
+def detect_stage_transition(df):
+    ma50 = df["Close"].rolling(50).mean()
+    ma200 = df["Close"].rolling(200).mean()
+
+    if ma50.iloc[-1] > ma200.iloc[-1] and ma50.iloc[-20] <= ma200.iloc[-20]:
+        return "Stage 1 ➜ Stage 2"
+
+    if ma50.iloc[-1] < ma200.iloc[-1] and ma50.iloc[-20] >= ma200.iloc[-20]:
+        return "Stage 3 ➜ Stage 4"
+
+    return None
+
+
+def detect_strong_stage2(score, breakout):
+    return score >= 8 and breakout
+
+
+async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #if not context.args:
+    #    await update.message.reply_text("กรุณาพิมพ์ชื่อหุ้น เช่น AAPL")
+    #    return
+
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        # ===== เรียกข้อมูล SATA =====
+        #df, sata = calculate_sata(symbol)
+        df, sata, rs = calculate_sata(symbol)
+
+        latest_score = int(sata["score"].iloc[-1])
+        stage_label = detect_stage_pro(df, sata)
+        is_base = detect_base(df)
+        is_breakout = detect_breakout(df)
+
+        # ===== สร้างกราฟ =====
+        chart = plot_sata(symbol)
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+        return
+
+
+    # ===============================
+    # ADVANCED PRO+ LOGIC
+    # ===============================
+
+    volume_contraction = detect_volume_contraction(df)
+
+    base_high = df["High"].rolling(30).max().iloc[-2]
+
+    breakout = df["Close"].iloc[-1] > base_high
+
+    breakout_volume = detect_breakout_volume(df, base_high)
+
+    rs_new_high = detect_rs_new_high(rs)
+
+    stage_transition = detect_stage_transition(df)
+
+    strong_stage2 = detect_strong_stage2(latest_score, breakout)
+
+
+    caption_text = f"""
+
+    📊 {symbol} — Stage Analysis
+
+    SATA Score: {latest_score}/10
+    Base Forming: {"Yes" if is_base else "No"}
+    Breakout: {"Yes 🚀" if is_breakout else "No"}
+
+    Volume Contraction: {"Yes 📉" if volume_contraction else "No"}
+    Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
+    RS New High: {"Yes 💪" if rs_new_high else "No"}
+
+    Stage Transition: {stage_transition if stage_transition else "None"}
+
+    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
+    """
+
+    #await update.message.reply_photo(
+    #    photo=chart,
+    #    caption=caption_text
+    #)
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=caption_text,
+        #caption=f"📊 {symbol} — Stage Analysis",
+        reply_markup=post_result_keyboard(symbol)
+    )
 
 # ==========================================================
 # IMACD SCAN COMMANDS (/im1 /im2)
@@ -1587,6 +2271,59 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     symbols = get_all_symbols()
     await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
+async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+
+    symbols = get_all_symbols()
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+    import math
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            if r["breakout"]:
+                text += " 🚀"
+
+            if r["rs"]:
+                text += " RS↑"
+
+            text += "\n"
+
+        if p == pages - 1:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=main_menu_keyboard()
+            )
+
+        else:
+            await update.message.reply_text(text)
 
 
 def count_green_streak(sh_series: pd.Series) -> int:
@@ -1692,6 +2429,101 @@ def scan_impulse_green_streak(
     results = sorted(results, key=lambda x: x["streak"])
 
     return results
+
+
+# ==========================================================
+# STAGE SCAN ENGINE
+# ==========================================================
+
+def scan_stage2_market(symbols):
+
+    results = []
+
+    for symbol in symbols:
+
+        try:
+
+            df, sata, rs = calculate_sata(symbol)
+
+            if len(df) < 100:
+                continue
+
+            latest_score = sata["score"].iloc[-1]
+
+            stage = detect_stage_pro(df, sata)
+
+            base = detect_base(df)
+
+            breakout = detect_breakout(df)
+
+            rs_new_high = detect_rs_new_high(rs)
+
+            strong_stage2 = detect_strong_stage2(latest_score, breakout)
+
+            # ===== เงื่อนไข Stage 2 Screener =====
+            #if stage == "Stage 2" and strong_stage2:
+            #if stage == "Stage 2":
+            if stage == "Stage 2" and latest_score >= 6:
+
+                price = df["Close"].iloc[-1]
+
+                results.append({
+                    "symbol": symbol,
+                    "score": latest_score,
+                    "price": price,
+                    "breakout": breakout,
+                    "rs": rs_new_high
+                })
+
+        except:
+            continue
+
+
+    # เรียงจาก SATA Score สูงสุด
+    results = sorted(results, key=lambda x: x["score"], reverse=True)
+
+    return results
+
+
+async def run_stage_scan(query, symbols):
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+    import math
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            if r["breakout"]:
+                text += " 🚀"
+
+            if r["rs"]:
+                text += " RS↑"
+
+            text += "\n"
+
+        await query.message.reply_text(text)
 
 
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
@@ -1821,7 +2653,13 @@ def main():
     app.add_handler(CommandHandler("im1", cmd_im1))
     app.add_handler(CommandHandler("im2", cmd_im2))
 
+    app.add_handler(CommandHandler("man", cmd_man))
+
+    app.add_handler(CommandHandler("stage", cmd_stage))
+
     #app.add_handler(CommandHandler("scanmenu", cmd_scanmenu))
+
+    app.add_handler(CommandHandler("stage2scan", cmd_stage_scan))
 
     app.run_polling()
 
