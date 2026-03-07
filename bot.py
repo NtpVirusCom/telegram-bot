@@ -2463,7 +2463,8 @@ def scan_stage2_market(symbols):
             # ===== เงื่อนไข Stage 2 Screener =====
             #if stage == "Stage 2" and strong_stage2:
             #if stage == "Stage 2":
-            if stage == "Stage 2" and latest_score >= 6:
+            if stage == strong_stage2:
+            #if stage == "Stage 2" and latest_score >= 6:
 
                 price = df["Close"].iloc[-1]
 
