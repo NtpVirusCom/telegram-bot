@@ -1,4 +1,4 @@
-# ========================================================v.121==
+# ========================================================v.125==
 # Imports & Config
 # ==========================================================
 import os
@@ -26,17 +26,16 @@ def main_menu_keyboard():
             InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
         [
-            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
-            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+            InlineKeyboardButton("🆕 Mansfield RS", callback_data="menu_man"),
+            InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
         ],
         [
-            InlineKeyboardButton("📊 Mansfield RS", callback_data="menu_man"),
+
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         [
-            InlineKeyboardButton("📊 Stage Analysis", callback_data="menu_stage"),
-        ],
-        [
-            InlineKeyboardButton("🚀 Stage 2 Scan", callback_data="menu_stage_scan"),
+            InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
         ],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
@@ -63,14 +62,16 @@ def post_result_keyboard(symbol: str):
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
-            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
-            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+            InlineKeyboardButton("🆕 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
+            InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
+
         ],
         [
-            InlineKeyboardButton("📊 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         [
-            InlineKeyboardButton("📊 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
+            InlineKeyboardButton("🔍 Stage 2 ต่อ", callback_data=f"again_stage_scan:{symbol}"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -674,6 +675,24 @@ def calculate_rr(price, support, resistance):
 
 
 # ==========================================================
+# Extended Hours Price
+# ==========================================================
+def get_extended_hours(symbol):
+
+    try:
+        t = yf.Ticker(symbol)
+        info = t.info
+
+        pre = info.get("preMarketPrice")
+        post = info.get("postMarketPrice")
+
+        return pre, post
+
+    except Exception:
+        return None, None
+
+
+# ==========================================================
 # Market Comparison
 # ==========================================================
 def one_month_return(symbol):
@@ -874,6 +893,21 @@ def analyze(symbol: str) -> dict:
     price = close.iloc[-1]
     change_pct = (price - close.iloc[-2]) / close.iloc[-2] * 100
 
+    # NEW
+    pre_market, post_market = get_extended_hours(symbol)
+
+    # =========================
+    # Extended Hours Gap %
+    # =========================
+    pre_gap_pct = None
+    post_gap_pct = None
+
+    if pre_market:
+        pre_gap_pct = (pre_market - price) / price * 100
+
+    if post_market:
+        post_gap_pct = (post_market - price) / price * 100
+
     ema50 = close.ewm(span=50, adjust=False).mean().iloc[-1]
     ema100 = close.ewm(span=100, adjust=False).mean().iloc[-1]
 
@@ -894,6 +928,10 @@ def analyze(symbol: str) -> dict:
     return {
         "price": price,
         "change_pct": change_pct,
+        "pre_market": pre_market,
+        "post_market": post_market,
+        "pre_gap_pct": pre_gap_pct,
+        "post_gap_pct": post_gap_pct,
         "ema50": ema50,
         "ema100": ema100,
         "ema200": ema200,
@@ -1887,6 +1925,11 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_stage(query, context)
 
+    elif data.startswith("again_stage_scan:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_stage(query, context)
+
 
 
 # ==========================================================
@@ -1943,6 +1986,19 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+
+    pre_text = "-"
+    post_text = "-"
+
+    if d["pre_market"]:
+        gap = f" ({d['pre_gap_pct']:+.2f}%)" if d["pre_gap_pct"] else ""
+        pre_text = f"${d['pre_market']:.2f}{gap}"
+
+    if d["post_market"]:
+        gap = f" ({d['post_gap_pct']:+.2f}%)" if d["post_gap_pct"] else ""
+        post_text = f"${d['post_market']:.2f}{gap}"
+
+
     thesis = pro_investor_thesis(
         d['price'],
         d['ema50'],
@@ -1955,9 +2011,15 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         d['hist'].iloc[-1],
     )
 
+    #text = (
+    #    f"📊 {symbol}\n"
+    #    f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+
     text = (
         f"📊 {symbol}\n"
-        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n"
+        f"🌅 ราคาก่อนตลาดเปิด: {pre_text}\n"
+        f"🌙 ราคาหลังตลาดปิด: {post_text}\n\n"
         f"• EMA50: {d['ema50']:.2f}\n"
         f"• EMA100: {d['ema100']:.2f}\n"
         f"• EMA200: {d['ema200']:.2f}\n"
@@ -2463,8 +2525,6 @@ def scan_stage2_market(symbols):
             # ===== เงื่อนไข Stage 2 Screener =====
             #if stage == "Stage 2" and strong_stage2:
             #if stage == "Stage 2":
-            #if stage == strong_stage2:
-            #if stage == breakout:
             if stage == "Stage 2" and latest_score >= 6:
 
                 price = df["Close"].iloc[-1]
