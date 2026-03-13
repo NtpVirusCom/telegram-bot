@@ -1,4 +1,4 @@
-# ========================================================v.125==
+# ========================================================v.126-2==
 # Imports & Config
 # ==========================================================
 import os
@@ -1879,8 +1879,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     elif data == "menu_stage_scan":
+        await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
-        await run_stage_scan(query, symbols)
+        context.user_data["symbols"] = symbols
+        await cmd_stage_scan(query, context)
 
 
 
@@ -1928,7 +1930,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("again_stage_scan:"):
         symbol = data.split(":")[1]
         context.args = [symbol]
-        await cmd_stage(query, context)
+        await cmd_stage_scan(query, context)
 
 
 
@@ -1961,6 +1963,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif mode == "stage":
         await cmd_stage(update, context)
+
+    elif mode == "stage2scan":
+        await cmd_stage_scan(update, context)
+
+    
 
 
 
@@ -2337,9 +2344,9 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
-    symbols = get_all_symbols()
+    symbols = context.user_data.get("symbols")
 
     results = scan_stage2_market(symbols)
 
@@ -2388,6 +2395,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(text)
 
 
+
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
     #for val in reversed(sh_series):
@@ -2434,7 +2442,8 @@ def get_nasdaq100_symbols():
     # ✅ แปลงเป็น string กันพัง
     symbols = [str(s).replace(".", "-") for s in symbols]
 
-    return symbols[:100]
+    #return symbols[:100]
+    return symbols
 
 
 def get_all_symbols():
@@ -2525,6 +2534,8 @@ def scan_stage2_market(symbols):
             # ===== เงื่อนไข Stage 2 Screener =====
             #if stage == "Stage 2" and strong_stage2:
             #if stage == "Stage 2":
+            #if stage == strong_stage2:
+            #if stage == breakout:
             if stage == "Stage 2" and latest_score >= 6:
 
                 price = df["Close"].iloc[-1]
@@ -2539,7 +2550,6 @@ def scan_stage2_market(symbols):
 
         except:
             continue
-
 
     # เรียงจาก SATA Score สูงสุด
     results = sorted(results, key=lambda x: x["score"], reverse=True)
