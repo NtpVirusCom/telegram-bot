@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import math
 import os
 import pandas as pd
-import requests
+#import requests
 import yfinance as yf
 from io import StringIO
 from openai import OpenAI
