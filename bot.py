@@ -1,4 +1,4 @@
-# ========================================================v.126-2==
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import os
@@ -8,6 +8,8 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import math
 import io
+import requests
+from io import StringIO
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
@@ -2430,19 +2432,41 @@ def get_sp500_symbols():
     return symbols
 
 
+#NASDAQ100_SYMBOLS = None
+#
+#def get_nasdaq100_symbols():
+#    global NASDAQ100_SYMBOLS
+#
+#    if NASDAQ100_SYMBOLS:
+#        return NASDAQ100_SYMBOLS
+#
+#    #import pandas as pd
+#    #import requests
+#    #from io import StringIO
+#
+#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+#    headers = {"User-Agent": "Mozilla/5.0"}
+#
+#    r = requests.get(url, headers=headers)
+#    tables = pd.read_html(StringIO(r.text))
+#
+#    df = tables[4]
+#
+#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+#    return NASDAQ100_SYMBOLS
+
+
 def get_nasdaq100_symbols():
-    import pandas as pd
 
-    url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
-    df = pd.read_csv(url)
+    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-    # ✅ ลบ NaN ออกก่อน
-    symbols = df["Symbol"].dropna().tolist()
+    r = requests.get(url, headers=headers)
+    tables = pd.read_html(StringIO(r.text))
 
-    # ✅ แปลงเป็น string กันพัง
-    symbols = [str(s).replace(".", "-") for s in symbols]
+    df = tables[4]
 
-    #return symbols[:100]
+    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
     return symbols
 
 
