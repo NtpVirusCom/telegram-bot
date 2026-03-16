@@ -7,5 +7,3 @@ yt-dlp==2025.1.26
 openai==2.15.0
 matplotlib==3.6.2
 numpy==1.26.4
-requests==2.31.0
-
