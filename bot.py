@@ -1,4 +1,4 @@
-# ========================================================v.136==
+# ========================================================v.139==
 # Imports & Config
 # ==========================================================
 import io
@@ -563,43 +563,43 @@ def calculate_impulse_macd(df: pd.DataFrame):
 # 📊 STAGE ANALYSIS ATTRIBUTES
 # ===============================
 
-#def calculate_stage_attributes(symbol: str):
-#    data = yf.Ticker(symbol).history(period="2y")
-#
-#    close = data["Close"]
-#
-#    ma30 = close.rolling(30).mean()
-#    ma150 = close.rolling(150).mean()
-#    ma200 = close.rolling(200).mean()
-#
-#    mansfield = calculate_mansfield_rs(symbol)
-#
-#    price = close.iloc[-1]
-#    high_52w = close.tail(252).max()
-#
-#    slope200 = ma200.diff(20)
-#
-#    stage = "Stage 1 / Base"
-#
-#    if (
-#        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-#        and slope200.iloc[-1] > 0
-#        and mansfield.iloc[-1] > 0
-#        and price > 0.75 * high_52w
-#    ):
-#        stage = "Stage 2 – Uptrend"
-#
-#    elif price < ma200.iloc[-1]:
-#        stage = "Stage 4 – Downtrend"
-#
-#    return {
-#        "data": data.tail(252),
-#        "ma30": ma30.tail(252),
-#        "ma150": ma150.tail(252),
-#        "ma200": ma200.tail(252),
-#        "mansfield": mansfield,
-#        "stage": stage
-#    }
+def calculate_stage_attributes(symbol: str):
+    data = yf.Ticker(symbol).history(period="2y")
+
+    close = data["Close"]
+
+    ma30 = close.rolling(30).mean()
+    ma150 = close.rolling(150).mean()
+    ma200 = close.rolling(200).mean()
+
+    mansfield = calculate_mansfield_rs(symbol)
+
+    price = close.iloc[-1]
+    high_52w = close.tail(252).max()
+
+    slope200 = ma200.diff(20)
+
+    stage = "Stage 1 / Base"
+
+    if (
+        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
+        and slope200.iloc[-1] > 0
+        and mansfield.iloc[-1] > 0
+        and price > 0.75 * high_52w
+    ):
+        stage = "Stage 2 – Uptrend"
+
+    elif price < ma200.iloc[-1]:
+        stage = "Stage 4 – Downtrend"
+
+    return {
+        "data": data.tail(252),
+        "ma30": ma30.tail(252),
+        "ma150": ma150.tail(252),
+        "ma200": ma200.tail(252),
+        "mansfield": mansfield,
+        "stage": stage
+    }
 
 
 
@@ -1891,10 +1891,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    
-    #await query.answer()
 
-    #from telegram.error import BadRequest
+    #await query.answer()
 
     try:
         await query.answer()
@@ -2381,11 +2379,9 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
     RS New High: {"Yes 💪" if rs_new_high else "No"}
 
-    Stage Transition: {stage_transition if stage_transition else "None"} 
-    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}   
+    Stage Transition: {stage_transition if stage_transition else "None"}
+    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
     """
-
-    
 
     #await update.message.reply_photo(
     #    photo=chart,
@@ -2429,7 +2425,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    #import math
+    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2438,7 +2434,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         part = results[p*chunk:(p+1)*chunk]
 
-        text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
 
         if p == 0:
             text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
@@ -2453,11 +2449,9 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # breakout signal
             if r["breakout"]:
-                #text += " 🚀 Breakout"
-                text += " | Breakout 🚀"
+                text += " 🚀 Breakout"
             else:
-                #text += " | No Breakout"
-                text += ""
+                text += " | No Breakout"
 
             # RS signal
             if r["rs"]:
@@ -2508,7 +2502,7 @@ def count_green_streak(sh_series: pd.Series) -> int:
 
 
 def get_sp500_symbols():
-    #import pandas as pd
+    import pandas as pd
 
     url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
     df = pd.read_csv(url)
@@ -2517,30 +2511,6 @@ def get_sp500_symbols():
     symbols = [str(s).replace(".", "-") for s in symbols]
 
     return symbols
-
-
-#NASDAQ100_SYMBOLS = None
-#
-#def get_nasdaq100_symbols():
-#    global NASDAQ100_SYMBOLS
-#
-#    if NASDAQ100_SYMBOLS:
-#        return NASDAQ100_SYMBOLS
-#
-#    #import pandas as pd
-#    #import requests
-#    #from io import StringIO
-#
-#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-#    headers = {"User-Agent": "Mozilla/5.0"}
-#
-#    r = requests.get(url, headers=headers)
-#    tables = pd.read_html(StringIO(r.text))
-#
-#    df = tables[4]
-#
-#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-#    return NASDAQ100_SYMBOLS
 
 
 def get_nasdaq100_symbols():
@@ -2555,7 +2525,7 @@ def get_nasdaq100_symbols():
 
     symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
     return symbols
-    
+
 
 def get_all_symbols():
     """
@@ -2761,7 +2731,7 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
 
-        #import math
+        import math
 
         chunk_size = 20
         total_items = len(results)
