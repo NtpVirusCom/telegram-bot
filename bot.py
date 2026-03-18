@@ -22,9 +22,29 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 def main_menu_keyboard():
     keyboard = [
         [
+            InlineKeyboardButton("📊 Technical Analysis", callback_data="menu_ta"),
+            InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),            
+        ],
+        [
+            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+            InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
+        ],
+        [
+            InlineKeyboardButton("🆕 Mansfield RS", callback_data="menu_man"),
+            InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
+        ],
+        [
+
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
             InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
         ],
+        #[
+        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
+        #],
+        #[
+        #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
+        #],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
         ],
@@ -35,9 +55,31 @@ def main_menu_keyboard():
 def post_result_keyboard(symbol: str):
     keyboard = [
         [
+            #InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
+            InlineKeyboardButton("📊 Technical ต่อ", callback_data=f"again_ta:{symbol}"),
+            #InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),     
+            InlineKeyboardButton("🤖 AI ต่อ", callback_data=f"again_ai:{symbol}"),        
+        ],
+        [
+            #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
+            InlineKeyboardButton("📐 SR Zones ต่อ", callback_data=f"again_sr:{symbol}"),
+            #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
+            InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
+        ],
+        [
+            InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
+            InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
+
+        ],
+        [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
             InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
+        #[
+        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data=f"again_stage_scan:{symbol}"),
+        #],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
@@ -1856,42 +1898,69 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
+    #await query.answer()
+
+    try:
         await query.answer()
+    except BadRequest:
+        pass
 
     data = query.data
 
-    if data == "menu_im1":
+    if data == "menu_ta":
+        context.user_data["mode"] = "ta"
+        await query.message.reply_text("🔎 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+    elif data == "menu_ai":
+        context.user_data["mode"] = "ai"
+        await query.message.reply_text("🤖 พิมพ์สัญลักษณ์หุ้น เช่น `MSFT`")
+
+    elif data == "menu_sr":
+        context.user_data["mode"] = "sr"
+        await query.message.reply_text("📐 พิมพ์สัญลักษณ์หุ้น เช่น `NVDA`")
+
+    elif data == "menu_ch":
+        context.user_data["mode"] = "ch"
+        await query.message.reply_text("📈 พิมพ์สัญลักษณ์หุ้น เช่น `PLTR`")
+
+    elif data == "menu_impulse":
+        context.user_data["mode"] = "impulse"
+        await query.message.reply_text("⚡ พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
+
+    elif data == "menu_im1":
         await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
         symbols = get_all_symbols()
         context.user_data["mode"] = "im1"        
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
         await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+    elif data == "menu_im2":
+        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+        symbols = get_all_symbols()
+        context.user_data["mode"] = "im2"
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
+        await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
+
+    elif data == "menu_man":
+        context.user_data["mode"] = "man"
+        await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+    elif data == "menu_stage":
+        context.user_data["mode"] = "stage"
+        await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
 
     elif data == "menu_stage_scan":
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
+        context.user_data["symbols"] = symbols
+        await cmd_stage_scan(query, context)
 
-        results = scan_stage2_market(symbols)
 
-        if not results:
-            await query.message.reply_text("❌ ไม่พบหุ้น Stage 2")
-            return
-
-        import math
-        chunk = 20
-        pages = math.ceil(len(results) / chunk)
-
-        for p in range(pages):
-            part = results[p*chunk:(p+1)*chunk]
-
-            text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
-
-            if p == 0:
-                text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
-
-            for r in part:
-                text += f"🟢 {r['symbol']} | Score {r['score']} | ${r['price']:.2f}\n"
-
-            await query.message.reply_text(text)
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -1901,7 +1970,40 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             START_TEXT,
             reply_markup=main_menu_keyboard()
         )
+
     
+    # 🔁 วิเคราะห์ต่อทันที
+    elif data.startswith("again_ta:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ta(query, context)
+
+    elif data.startswith("again_ai:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ai(query, context)
+
+    elif data.startswith("again_sr:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_sr(query, context)
+
+    elif data.startswith("again_ch:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_ch(query, context)
+
+    elif data.startswith("again_man:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_man(query, context)
+
+    elif data.startswith("again_stage:"):
+        symbol = data.split(":")[1]
+        context.args = [symbol]
+        await cmd_stage(query, context)
+
+
 # ==========================================================
 # TEXT ROUTER (เพิ่ม impulse)
 # ==========================================================
@@ -1913,15 +2015,271 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = update.message.text.strip().upper()
     context.args = [symbol]
 
-    if mode == "im1":
+    if mode == "ta":
+        await cmd_ta(update, context)
+    elif mode == "ai":
+        await cmd_ai(update, context)
+    elif mode == "sr":
+        await cmd_sr(update, context)
+    elif mode == "ch":
+        await cmd_ch(update, context)
+    elif mode == "im1":
         await cmd_im1(update, context)
+    elif mode == "im2":
+        await cmd_im2(update, context)
+
+    elif mode == "man":
+        await cmd_man(update, context)
+
+    elif mode == "stage":
+        await cmd_stage(update, context)
 
     elif mode == "stage2scan":
         await cmd_stage_scan(update, context)
+
     
+
+
+
+
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
     context.user_data["last_symbol"] = symbol
+
+
+
+async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
+
+
+    pre_text = "-"
+    post_text = "-"
+
+    if d["pre_market"]:
+        gap = f" ({d['pre_gap_pct']:+.2f}%)" if d["pre_gap_pct"] else ""
+        pre_text = f"${d['pre_market']:.2f}{gap}"
+
+    if d["post_market"]:
+        gap = f" ({d['post_gap_pct']:+.2f}%)" if d["post_gap_pct"] else ""
+        post_text = f"${d['post_market']:.2f}{gap}"
+
+
+    thesis = pro_investor_thesis(
+        d['price'],
+        d['ema50'],
+        d['ema100'],
+        d['ema200'],
+        d['rsi'],
+        d['slope200'],
+        d['macd'].iloc[-1],
+        d['signal'].iloc[-1],
+        d['hist'].iloc[-1],
+    )
+
+    #text = (
+    #    f"📊 {symbol}\n"
+    #    f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+
+    text = (
+        f"📊 {symbol}\n"
+        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n"
+        f"🌅 ราคาก่อนตลาดเปิด: {pre_text}\n"
+        f"🌙 ราคาหลังตลาดปิด: {post_text}\n\n"
+        f"• EMA50: {d['ema50']:.2f}\n"
+        f"• EMA100: {d['ema100']:.2f}\n"
+        f"• EMA200: {d['ema200']:.2f}\n"
+        f"• RSI14: {d['rsi']:.2f}\n\n"
+        f"• MACD: {d['macd'].iloc[-1]:.3f}\n"
+        f"• Signal: {d['signal'].iloc[-1]:.3f}\n"
+        f"• Hist: {d['hist'].iloc[-1]:+.3f}\n\n"
+        #f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
+        #f"{format_sr_zones(d['price'], d['supports'], d['resistances'])}\n\n"
+        f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
+        f"🧠 บทสรุปเชิงกลยุทธ์\n"
+        f"{thesis}"
+    )
+
+
+
+
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
+
+
+    
+async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
+
+
+    ai = ai_thesis_generator(
+        symbol,
+        d["price"],
+        d["ema50"],
+        d["ema100"],
+        d["ema200"],
+        d["rsi"],
+        d["macd"].iloc[-1],
+        d["signal"].iloc[-1],
+        d["hist"].iloc[-1],
+        d["supports"],
+        d["resistances"],
+    )
+
+    text = (
+        "📊 {symbol}\n"
+        "💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+        "🤖 AI Thesis\n{ai}"
+    ).format(
+        symbol=symbol,
+        price=d["price"],
+        change=d["change_pct"],
+        ai=ai,
+    )
+
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
+
+
+async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        data_1y = yf.Ticker(symbol).history(period="1y")
+        if data_1y.empty or len(data_1y) < 50:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ ไม่พบชื่อหุ้นนี้")
+        return
+
+    price = data_1y["Close"].iloc[-1]
+    highs = data_1y["High"].values
+    lows = data_1y["Low"].values
+    prev_price = data_1y["Close"].iloc[-2]
+    change = (price - prev_price) / prev_price * 100
+
+
+    support, resistance = calculate_support_resistance_zones(
+        highs, lows, price
+    )
+
+    risk_pct, reward_pct, rr = calculate_rr(price, support, resistance)
+
+    text = f"📐 SR Zones — {symbol}\n"
+    #text += f"💵 Price: {price:.2f}\n\n"
+    text += f"💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+    #text += f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+
+    text += "🟢 Support Zones\n"
+    if support:
+        for s in support:
+            dist = (price - s["mid"]) / price * 100
+            text += f"  • {s['mid']:.0f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+    else:
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
+
+    text += "\n🔴 Resistance Zones\n"
+    if resistance:
+        for r in resistance:
+            dist = (r["mid"] - price) / price * 100
+            text += f"  • {r['mid']:.0f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+    else:
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
+
+    if rr:
+        text += (
+            f"\n⚖️ Risk / Reward\n"
+            f"  • Downside risk: ↓{risk_pct:.2f}%\n"
+            f"  • Upside reward: ↑{reward_pct:.2f}%\n"
+            f"  • R/R Ratio: {rr:.2f}x\n"
+        )
+
+        if rr >= 3:
+            text += "🟢 โครงสร้างราคาน่าสนใจ (Asymmetric)\n"
+        elif rr >= 2:
+            text += "🟡 โครงสร้างสมดุล\n"
+        else:
+            text += "🔴 Risk สูงเมื่อเทียบกับ Reward\n"
+    else:
+        text += "• ไม่สามารถประเมิน Risk / Reward ได้\n"
+
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+
+
+async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        chart = plot_technical_chart(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📈 {symbol}\nPrice + EMA + MACD + Support / Resistance + RSI",
+        #reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+async def cmd_man(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        chart = plot_stage_rs(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟ Stage RS ได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📊 {symbol} — Mansfield RS",
+        reply_markup=post_result_keyboard(symbol)
+    )
+
 
 # ===============================
 # ADVANCED PRO+ DETECTION ENGINE
@@ -1931,6 +2289,7 @@ def detect_volume_contraction(df, lookback=20):
     recent_vol = df["Volume"].tail(lookback)
     return recent_vol.mean() < df["Volume"].rolling(50).mean().iloc[-1]
 
+
 def detect_breakout_volume(df, breakout_level):
     latest_vol = df["Volume"].iloc[-1]
     avg_vol = df["Volume"].rolling(50).mean().iloc[-1]
@@ -1938,9 +2297,11 @@ def detect_breakout_volume(df, breakout_level):
     volume_expansion = latest_vol > avg_vol * 1.5
     return price_breakout and volume_expansion
 
+
 def detect_rs_new_high(rs_series, lookback=60):
     recent_high = rs_series.tail(lookback).max()
     return rs_series.iloc[-1] >= recent_high
+
 
 def detect_stage_transition(df):
     ma50 = df["Close"].rolling(50).mean()
@@ -2044,6 +2405,14 @@ async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbols = get_all_symbols()
     await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
+
+async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
@@ -2120,6 +2489,18 @@ def count_green_streak(sh_series: pd.Series) -> int:
             break
     return streak
 
+
+#def get_sp500_symbols():
+#    table = pd.read_html(
+#        "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+#    )
+#    symbols = table[0]["Symbol"].tolist()
+#
+#    # แก้ BRK.B → BRK-B format สำหรับ yfinance
+#    symbols = [s.replace(".", "-") for s in symbols]
+#    return symbols
+
+
 def get_sp500_symbols():
     import pandas as pd
 
@@ -2147,7 +2528,9 @@ def get_nasdaq100_symbols():
 
 
 def get_all_symbols():
-
+    """
+    รวมสองตลาด + ลบตัวซ้ำ
+    """
     sp500 = get_sp500_symbols()
     nasdaq = get_nasdaq100_symbols()
 
@@ -2198,6 +2581,7 @@ def scan_impulse_green_streak(
     results = sorted(results, key=lambda x: x["streak"])
 
     return results
+
 
 # ==========================================================
 # STAGE SCAN ENGINE
@@ -2262,21 +2646,79 @@ def scan_stage2_market(symbols):
         except:
             continue
 
+
+    # เรียงจาก SATA Score สูงสุด
     results = sorted(results, key=lambda x: x["score"], reverse=True)
 
     return results
 
+
+#async def run_stage_scan(query, symbols):
+#
+#    results = scan_stage2_market(symbols)
+#
+#    if not results:
+#        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
+#        return
+#
+#    import math
+#
+#    chunk = 20
+#    pages = math.ceil(len(results) / chunk)
+#
+#    for p in range(pages):
+#
+#        part = results[p*chunk:(p+1)*chunk]
+#
+#        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+#
+#        if p == 0:
+#            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+#
+#        for r in part:
+#
+#            text += (
+#                f"🟢 {r['symbol']} "
+#                f"| Score {r['score']}/10 "
+#                f"| ${r['price']:.2f}"
+#            )
+#
+#            if r["breakout"]:
+#                text += " 🚀"
+#
+#            if r["rs"]:
+#                text += " RS↑"
+#
+#            text += "\n"
+#
+#        await query.message.reply_text(text)
+
+
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
-    # ✅ แยก object ให้ถูก
-    if hasattr(update_or_query, "callback_query"):
-        msg = update_or_query.callback_query.message
-    elif hasattr(update_or_query, "message"):
+
+
+    # 🔥 STEP A: โหลด symbols
+    #symbols = get_all_symbols()
+
+    # 🔥 STEP B: print ตรงนี้ (จะทำงานแน่นอน)
+    #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+
+    # 🔥 STEP C: เอาไปใช้ scan
+    #results = scan_impulse_green_streak(symbols)
+
+
+
+    # ✅ แยก message กับ callback ให้ชัด
+    if hasattr(update_or_query, "message"):  
+        # มาจาก callback_query
         msg = update_or_query.message
     else:
-        msg = update_or_query.message  # fallback
+        # มาจาก update.message
+        msg = update_or_query.message
 
-    await msg.reply_text("⏳ กำลังประมวลผล...")
+    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
 
     try:
         results = scan_impulse_green_streak(
@@ -2328,6 +2770,25 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
         await msg.reply_text(f"❌ scan error: {str(e)}")
 
 
+#async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    symbols = get_all_symbols()
+#    #await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+#    await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+
+#async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    symbols = get_all_symbols()
+#    #await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+#    await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
+
+
+
+
+
+
+
+
+
 # ==========================================================
 # App Bootstrap
 # ==========================================================
@@ -2335,6 +2796,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(message)s"
 )
+
 
 # ==========================================================
 # REGISTER HANDLER (เพิ่มบรรทัดนี้)
@@ -2350,7 +2812,20 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
 
+    app.add_handler(CommandHandler("ta", cmd_ta))
+    app.add_handler(CommandHandler("ai", cmd_ai))
+    app.add_handler(CommandHandler("sr", cmd_sr))
+    app.add_handler(CommandHandler("ch", cmd_ch))
+
+    #app.add_handler(CommandHandler("scan", cmd_scan))
     app.add_handler(CommandHandler("im1", cmd_im1))
+    app.add_handler(CommandHandler("im2", cmd_im2))
+
+    app.add_handler(CommandHandler("man", cmd_man))
+
+    app.add_handler(CommandHandler("stage", cmd_stage))
+
+    #app.add_handler(CommandHandler("scanmenu", cmd_scanmenu))
 
     app.add_handler(CommandHandler("stage2scan", cmd_stage_scan))
 
