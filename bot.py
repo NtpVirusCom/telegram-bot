@@ -10,59 +10,7 @@ import math
 import io
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
-from openai import OpenAI
-
-# ==========================================================
-# MODIFY MENU
-# ==========================================================
-def main_menu_keyboard():
-    keyboard = [
-        [
-            InlineKeyboardButton("📊 Technical Analysis", callback_data="menu_ta"),
-            InlineKeyboardButton("🤖 AI Thesis", callback_data="menu_ai"),            
-        ],
-        [
-            InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
-            InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
-        ],
-        [
-            InlineKeyboardButton("🆕 Mansfield RS", callback_data="menu_man"),
-            InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
-        ],
-        [
-
-            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
-            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-        ],
-        [
-            InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
-        ],
-        #[
-        #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
-        #],
-        [
-            InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def post_result_keyboard(symbol: str):
-    keyboard = [
-        [
-            #InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
-            InlineKeyboardButton("📊 Technical ต่อ", callback_data=f"again_ta:{symbol}"),
-            #InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),     
-            InlineKeyboardButton("🤖 AI ต่อ", callback_data=f"again_ai:{symbol}"),        
-        ],
-        [
-            #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
-            InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
-            #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
-            InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
-        ],
-        [
-            InlineKeyboardButton("🆕 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
+ol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
 
         ],
