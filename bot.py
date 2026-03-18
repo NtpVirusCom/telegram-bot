@@ -3,22 +3,7 @@
 # ==========================================================
 import os
 import logging
-import pandas as pd
-import yfinance as yf
-import matplotlib.pyplot as plt
-import math
-import io
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
-ol}"),
-            InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
-
-        ],
-        [
-            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
-            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-        ],
-        [
+import
             InlineKeyboardButton("🔍 Stage 2 ต่อ", callback_data=f"again_stage_scan:{symbol}"),
         ],
         [
