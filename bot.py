@@ -1898,12 +1898,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    #await query.answer()
+    await query.answer()
 
-    try:
-        await query.answer()
-    except BadRequest:
-        pass
+    #try:
+    #    await query.answer()
+    #except BadRequest:
+    #    pass
 
     data = query.data
 
