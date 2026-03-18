@@ -1,4 +1,4 @@
-# ==========================================================
+# ========================================================v.141==
 # Imports & Config
 # ==========================================================
 import io
@@ -1962,9 +1962,31 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     elif data == "menu_stage_scan":
-        context.user_data["mode"] = "stage2scan"
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
-        
+        symbols = get_all_symbols()
+
+        results = scan_stage2_market(symbols)
+
+        if not results:
+            await query.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+            return
+
+        import math
+        chunk = 20
+        pages = math.ceil(len(results) / chunk)
+
+        for p in range(pages):
+            part = results[p*chunk:(p+1)*chunk]
+
+            text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
+
+            if p == 0:
+                text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+            for r in part:
+                text += f"🟢 {r['symbol']} | Score {r['score']} | ${r['price']:.2f}\n"
+
+            await query.message.reply_text(text)
 
 
 
@@ -2422,8 +2444,6 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
-
-    symbols = get_all_symbols()
 
     symbols = context.user_data.get("symbols")
 
