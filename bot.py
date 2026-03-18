@@ -1,20 +1,19 @@
-# ========================================================v.139==
+# ========================================================v.126-4==
 # Imports & Config
 # ==========================================================
-import io
+import os
 import logging
+import pandas as pd
+import yfinance as yf
 import matplotlib.pyplot as plt
 import math
-import os
-import pandas as pd
+import io
 import requests
-import yfinance as yf
 from io import StringIO
-from openai import OpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
-
+from openai import OpenAI
 
 # ==========================================================
 # MODIFY MENU
@@ -35,13 +34,12 @@ def main_menu_keyboard():
         ],
         [
 
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+        ],
+        [
             InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
-        #],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
         #],
@@ -62,23 +60,22 @@ def post_result_keyboard(symbol: str):
         ],
         [
             #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
-            InlineKeyboardButton("📐 SR Zones ต่อ", callback_data=f"again_sr:{symbol}"),
+            InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
             #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
-            InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
+            InlineKeyboardButton("🆕 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
 
         ],
         [
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data=f"again_stage_scan:{symbol}"),
-        #],
+        [
+            InlineKeyboardButton("🔍 Stage 2 ต่อ", callback_data=f"again_stage_scan:{symbol}"),
+        ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
@@ -388,64 +385,6 @@ def detect_stage_pro(df, sata):
         stage = "Stage 3"
 
     return stage
-
-
-def detect_weinstein_stage(df):
-
-    close = df["Close"]
-
-    ma10 = close.rolling(10).mean()
-    ma30 = close.rolling(30).mean()
-    ma40 = close.rolling(40).mean()
-
-    price = close.iloc[-1]
-
-    ma40_now = ma40.iloc[-1]
-    ma40_prev = ma40.iloc[-5]
-
-    slope40 = ma40_now - ma40_prev
-
-    # ----------------------
-    # Stage 2
-    # ----------------------
-    if price > ma40_now and slope40 > 0:
-
-        base_high = df["High"].rolling(30).max().iloc[-2]
-
-        if price > base_high:
-            return "2A — Breakout 🚀"
-        else:
-            return "2B — Advancing Trend"
-
-    # ----------------------
-    # Stage 4
-    # ----------------------
-    if price < ma40_now and slope40 < 0:
-
-        base_low = df["Low"].rolling(30).min().iloc[-2]
-
-        if price < base_low:
-            return "4A — Breakdown 🔻"
-        else:
-            return "4B — Declining"
-
-    # ----------------------
-    # Stage 1
-    # ----------------------
-    if abs(slope40) < ma40_now * 0.002:
-
-        if price < ma40_now:
-            return "1A — Bottoming"
-        else:
-            return "1B — Base Building"
-
-    # ----------------------
-    # Stage 3
-    # ----------------------
-    if price > ma40_now:
-        return "3A — Topping"
-
-    return "3B — Distribution"
 
 
 def detect_base(df):
@@ -1889,15 +1828,18 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 # CALLBACK MENU
 # ==========================================================
+from telegram.error import BadRequest
+
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    #await query.answer()
-
     try:
         await query.answer()
-    except BadRequest:
-        pass
+    except BadRequest as e:
+        if "Query is too old" in str(e):
+            pass
+        else:
+            raise
 
     data = query.data
 
@@ -1930,7 +1872,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
     elif data == "menu_im2":
-        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+        await query.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
         symbols = get_all_symbols()
         context.user_data["mode"] = "im2"
         #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
@@ -2334,8 +2276,7 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         df, sata, rs = calculate_sata(symbol)
 
         latest_score = int(sata["score"].iloc[-1])
-        #stage_label = detect_stage_pro(df, sata)
-        stage_label = detect_weinstein_stage(df)
+        stage_label = detect_stage_pro(df, sata)
         is_base = detect_base(df)
         is_breakout = detect_breakout(df)
 
@@ -2367,9 +2308,8 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     caption_text = f"""
-    📊 {symbol} — Stage Analysis
 
-    Stage: {stage_label}
+    📊 {symbol} — Stage Analysis
 
     SATA Score: {latest_score}/10
     Base Forming: {"Yes" if is_base else "No"}
@@ -2380,6 +2320,7 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     RS New High: {"Yes 💪" if rs_new_high else "No"}
 
     Stage Transition: {stage_transition if stage_transition else "None"}
+
     Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
     """
 
@@ -2415,9 +2356,12 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
-
     symbols = context.user_data.get("symbols")
+
+    # ✅ FIX: ถ้าไม่มี symbols ให้โหลดใหม่
+    if not symbols:
+        symbols = get_all_symbols()
+        context.user_data["symbols"] = symbols
 
     results = scan_stage2_market(symbols)
 
@@ -2425,7 +2369,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    import math
+    #import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2447,26 +2391,13 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"| ${r['price']:.2f}"
             )
 
-            # breakout signal
             if r["breakout"]:
-                text += " 🚀 Breakout"
-            else:
-                text += " | No Breakout"
+                text += " 🚀"
 
-            # RS signal
             if r["rs"]:
-                text += " | RS↑"
+                text += " RS↑"
 
             text += "\n"
-
-            attrs = [
-                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
-                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
-            ]
-
-            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
-
-            text += f"   SATA: {attr_text}\n"
 
         if p == pages - 1:
 
@@ -2477,6 +2408,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             await update.message.reply_text(text)
+
 
 
 def count_green_streak(sh_series: pd.Series) -> int:
@@ -2511,6 +2443,30 @@ def get_sp500_symbols():
     symbols = [str(s).replace(".", "-") for s in symbols]
 
     return symbols
+
+
+#NASDAQ100_SYMBOLS = None
+#
+#def get_nasdaq100_symbols():
+#    global NASDAQ100_SYMBOLS
+#
+#    if NASDAQ100_SYMBOLS:
+#        return NASDAQ100_SYMBOLS
+#
+#    #import pandas as pd
+#    #import requests
+#    #from io import StringIO
+#
+#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+#    headers = {"User-Agent": "Mozilla/5.0"}
+#
+#    r = requests.get(url, headers=headers)
+#    tables = pd.read_html(StringIO(r.text))
+#
+#    df = tables[4]
+#
+#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+#    return NASDAQ100_SYMBOLS
 
 
 def get_nasdaq100_symbols():
@@ -2621,31 +2577,16 @@ def scan_stage2_market(symbols):
 
                 price = df["Close"].iloc[-1]
 
-                latest_attr = sata.iloc[-1]
-
                 results.append({
                     "symbol": symbol,
-                    "score": int(latest_score),
+                    "score": latest_score,
                     "price": price,
                     "breakout": breakout,
-                    "rs": rs_new_high,
-
-                    # SATA Attributes
-                    "a1": int(latest_attr["a1"]),
-                    "a2": int(latest_attr["a2"]),
-                    "a3": int(latest_attr["a3"]),
-                    "a4": int(latest_attr["a4"]),
-                    "a5": int(latest_attr["a5"]),
-                    "a6": int(latest_attr["a6"]),
-                    "a7": int(latest_attr["a7"]),
-                    "a8": int(latest_attr["a8"]),
-                    "a9": int(latest_attr["a9"]),
-                    "a10": int(latest_attr["a10"]),
+                    "rs": rs_new_high
                 })
 
         except:
             continue
-
 
     # เรียงจาก SATA Score สูงสุด
     results = sorted(results, key=lambda x: x["score"], reverse=True)
@@ -2653,45 +2594,45 @@ def scan_stage2_market(symbols):
     return results
 
 
-#async def run_stage_scan(query, symbols):
-#
-#    results = scan_stage2_market(symbols)
-#
-#    if not results:
-#        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
-#        return
-#
-#    import math
-#
-#    chunk = 20
-#    pages = math.ceil(len(results) / chunk)
-#
-#    for p in range(pages):
-#
-#        part = results[p*chunk:(p+1)*chunk]
-#
-#        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
-#
-#        if p == 0:
-#            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
-#
-#        for r in part:
-#
-#            text += (
-#                f"🟢 {r['symbol']} "
-#                f"| Score {r['score']}/10 "
-#                f"| ${r['price']:.2f}"
-#            )
-#
-#            if r["breakout"]:
-#                text += " 🚀"
-#
-#            if r["rs"]:
-#                text += " RS↑"
-#
-#            text += "\n"
-#
-#        await query.message.reply_text(text)
+async def run_stage_scan(query, symbols):
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+    import math
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            if r["breakout"]:
+                text += " 🚀"
+
+            if r["rs"]:
+                text += " RS↑"
+
+            text += "\n"
+
+        await query.message.reply_text(text)
 
 
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
