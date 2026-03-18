@@ -1,4 +1,4 @@
-# ========================================================v.126-4==
+# ========================================================v.125==
 # Imports & Config
 # ==========================================================
 import os
@@ -8,10 +8,7 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import math
 import io
-import requests
-from io import StringIO
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
 
@@ -1828,18 +1825,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 # CALLBACK MENU
 # ==========================================================
-from telegram.error import BadRequest
-
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-
-    try:
-        await query.answer()
-    except BadRequest as e:
-        if "Query is too old" in str(e):
-            pass
-        else:
-            raise
+    await query.answer()
 
     data = query.data
 
@@ -1891,10 +1879,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     elif data == "menu_stage_scan":
-        await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
-        context.user_data["symbols"] = symbols
-        await cmd_stage_scan(query, context)
+        await run_stage_scan(query, symbols)
 
 
 
@@ -1942,7 +1928,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("again_stage_scan:"):
         symbol = data.split(":")[1]
         context.args = [symbol]
-        await cmd_stage_scan(query, context)
+        await cmd_stage(query, context)
 
 
 
@@ -1975,11 +1961,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif mode == "stage":
         await cmd_stage(update, context)
-
-    elif mode == "stage2scan":
-        await cmd_stage_scan(update, context)
-
-    
 
 
 
@@ -2356,12 +2337,9 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    symbols = context.user_data.get("symbols")
+    await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
-    # ✅ FIX: ถ้าไม่มี symbols ให้โหลดใหม่
-    if not symbols:
-        symbols = get_all_symbols()
-        context.user_data["symbols"] = symbols
+    symbols = get_all_symbols()
 
     results = scan_stage2_market(symbols)
 
@@ -2369,7 +2347,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    #import math
+    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2410,7 +2388,6 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(text)
 
 
-
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
     #for val in reversed(sh_series):
@@ -2445,42 +2422,19 @@ def get_sp500_symbols():
     return symbols
 
 
-#NASDAQ100_SYMBOLS = None
-#
-#def get_nasdaq100_symbols():
-#    global NASDAQ100_SYMBOLS
-#
-#    if NASDAQ100_SYMBOLS:
-#        return NASDAQ100_SYMBOLS
-#
-#    #import pandas as pd
-#    #import requests
-#    #from io import StringIO
-#
-#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-#    headers = {"User-Agent": "Mozilla/5.0"}
-#
-#    r = requests.get(url, headers=headers)
-#    tables = pd.read_html(StringIO(r.text))
-#
-#    df = tables[4]
-#
-#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-#    return NASDAQ100_SYMBOLS
-
-
 def get_nasdaq100_symbols():
+    import pandas as pd
 
-    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    df = pd.read_csv(url)
 
-    r = requests.get(url, headers=headers)
-    tables = pd.read_html(StringIO(r.text))
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Symbol"].dropna().tolist()
 
-    df = tables[4]
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
 
-    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-    return symbols
+    return symbols[:100]
 
 
 def get_all_symbols():
@@ -2571,8 +2525,6 @@ def scan_stage2_market(symbols):
             # ===== เงื่อนไข Stage 2 Screener =====
             #if stage == "Stage 2" and strong_stage2:
             #if stage == "Stage 2":
-            #if stage == strong_stage2:
-            #if stage == breakout:
             if stage == "Stage 2" and latest_score >= 6:
 
                 price = df["Close"].iloc[-1]
@@ -2587,6 +2539,7 @@ def scan_stage2_market(symbols):
 
         except:
             continue
+
 
     # เรียงจาก SATA Score สูงสุด
     results = sorted(results, key=lambda x: x["score"], reverse=True)
