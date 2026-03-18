@@ -1,4 +1,4 @@
-# ========================================================v.140==
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import io
@@ -1954,11 +1954,17 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
 
 
+    #elif data == "menu_stage_scan":
+    #    await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+    #    symbols = get_all_symbols()
+    #    context.user_data["symbols"] = symbols
+    #    await cmd_stage_scan(query, context)
+
+
     elif data == "menu_stage_scan":
+        context.user_data["mode"] = "stage2scan"
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
-        symbols = get_all_symbols()
-        context.user_data["symbols"] = symbols
-        await cmd_stage_scan(query, context)
+        
 
 
 
@@ -2417,6 +2423,8 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
+    symbols = get_all_symbols()
+
     symbols = context.user_data.get("symbols")
 
     results = scan_stage2_market(symbols)
@@ -2710,15 +2718,34 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
 
 
-    # ✅ แยก message กับ callback ให้ชัด
-    if hasattr(update_or_query, "message"):  
-        # มาจาก callback_query
+    ## ✅ แยก message กับ callback ให้ชัด
+    #if hasattr(update_or_query, "message"):  
+    #    # มาจาก callback_query
+    #    msg = update_or_query.message
+    #else:
+    #    # มาจาก update.message
+    #    msg = update_or_query.message
+    #
+    ##await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
+    #
+    #try:
+    #    results = scan_impulse_green_streak(
+    #        symbols,
+    #        min_streak=min_streak,
+    #        mode=mode
+    #    )
+
+
+
+    # ✅ แยก object ให้ถูก
+    if hasattr(update_or_query, "callback_query"):
+        msg = update_or_query.callback_query.message
+    elif hasattr(update_or_query, "message"):
         msg = update_or_query.message
     else:
-        # มาจาก update.message
-        msg = update_or_query.message
+        msg = update_or_query.message  # fallback
 
-    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
+    await msg.reply_text("⏳ กำลังประมวลผล...")
 
     try:
         results = scan_impulse_green_streak(
