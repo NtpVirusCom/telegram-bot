@@ -724,6 +724,12 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
+    # ✅ รองรับทั้ง callback และ message
+    if hasattr(update, "message") and update.message:
+        msg = update.message
+    else:
+        msg = update.message  # callback ก็ใช้ message ได้
+
     symbols = context.user_data.get("symbols")
 
     results = scan_stage2_market(symbols)
