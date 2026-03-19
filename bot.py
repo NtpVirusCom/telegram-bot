@@ -674,9 +674,13 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ===== สร้างกราฟ =====
         chart = plot_sata(symbol)
 
+    #except Exception as e:
+    #    #await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+    #    await msg.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+    #    return
+
     except Exception as e:
-        #await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
-        await msg.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+        await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
         return
 
 
@@ -728,11 +732,25 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 
 async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    #await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+
+    if update.message:
+        msg = update.message
+    elif update.callback_query:
+        msg = update.callback_query.message
+    else:
+        return
+
     await msg.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
 
     symbols = get_all_symbols()
-    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+    await run_scan(
+        update,
+        symbols,
+        min_streak=3,
+        mode="below",
+        title="🆕 Impulse GREEN Streak 1–2 วัน"
+    )
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -1033,6 +1051,12 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
     except Exception as e:
         await msg.reply_text(f"❌ scan error: {str(e)}")
+
+async def error_handler(update, context):
+    print(f"ERROR: {context.error}", flush=True)
+
+    app.add_error_handler(error_handler)
+
 
 # ==========================================================
 # App Bootstrap
