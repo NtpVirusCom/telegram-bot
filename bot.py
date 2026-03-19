@@ -23,7 +23,6 @@ def main_menu_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
             InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
         ],
         [
@@ -45,18 +44,6 @@ def post_result_keyboard(symbol: str):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_sr_zones_1y(data, price):
-    data_1y = data.tail(252)  # ~1Y
-    highs = data_1y["High"].values
-    lows = data_1y["Low"].values
-
-    support, resistance = calculate_support_resistance_zones(
-        highs, lows, price,
-        period=4,
-        channel_pct=0.01
-    )
-    return support, resistance
-
 # ==========================================================
 # Text Assets
 # ==========================================================
@@ -67,25 +54,12 @@ START_TEXT = """
 ออกแบบในมุมมองนักลงทุนมืออาชีพ
 
 🔍 ฟีเจอร์หลัก
-• Technical Analysis (rule-based)
-• AI Investment Thesis (institutional tone)
-• Support / Resistance อัตโนมัติ
-• เปรียบเทียบกับตลาด (NASDAQ / S&P500)
 
 🚀 คำสั่งเริ่มต้น
-/ta <symbol>  วิเคราะห์เชิงเทคนิค
-/ai <symbol>  AI Investment Thesis
-/sr <symbol>  Support / Resistance
-/ch <symbol>  แสดงกราฟราคา
 
 📌 ตัวอย่าง
-/ta aapl
-/ai msft
-/sr nvda
-/ch pltr
 
 ℹ️ ดูคำสั่งทั้งหมด
-/help
 
 ⚠️ เพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
 """
@@ -96,44 +70,14 @@ HELP_TEXT = """
 ━━━━━━━━━━
 🟢 CORE
 ━━━━━━━━━━
-/ta <symbol>
-• Technical Analysis (rule-based)
-• Trend, Momentum, Support / Resistance
-• Market comparison + Strategic thesis
 
-/ai <symbol>
-• AI Investment Thesis
-• มุมมองเชิงกลยุทธ์แบบนักลงทุนสถาบัน
-• สรุป Risk / Opportunity / Action bias
-
-/im1
-• Scan Impulse GREEN 1–2 วัน
-
-/im2
-• Scan Impulse GREEN ≥ 3 วัน
 ━━━━━━━━━━
 🟡 DETAIL (coming / optional)
 ━━━━━━━━━━
-/levels <symbol>
-• Key Support / Resistance levels
-
-/trend <symbol>
-• Market structure & trend direction
-
-/momentum <symbol>
-• RSI & momentum regime
 
 ━━━━━━━━━━
 🔵 AI PRO (future-ready)
 ━━━━━━━━━━
-/bias <symbol>
-• Action bias: Accumulate / Hold / Wait / Reduce
-
-/risk <symbol>
-• Downside risk & scenario analysis
-
-/outlook <symbol>
-• Medium-term outlook (1–3 months)
 
 ━━━━━━━━━━
 ⚙️ UTILITY
@@ -143,17 +87,12 @@ HELP_TEXT = """
 
 /help
 • ดูรายการคำสั่งทั้งหมด
-
 ━━━━━━━━━━
 📌 ตัวอย่าง
 ━━━━━━━━━━
-/ta msft
-/ai tsla
 
 ⚠️ ข้อมูลเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
 """
-
-
 
 # ==========================================================
 # Environment
@@ -163,33 +102,6 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 #client = OpenAI(api_key=OPENAI_API_KEY)
-
-
-# ==========================================================
-# Technical Indicators
-# ==========================================================
-def calculate_rsi(close, period: int = 14):
-    delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
-
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-
-def calculate_macd(close):
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-
-    macd = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    hist = macd - signal
-
-    return macd, signal, hist
-
 
 # ==========================================================
 # Mansfield RS (StageAnalysis - Weekly, Unflattened)
@@ -501,478 +413,6 @@ def calculate_impulse_macd(df: pd.DataFrame):
 
     return md, sb, sh
 
-# ===============================
-# 📊 MANSFIELD RELATIVE STRENGTH
-# ===============================
-
-#def calculate_mansfield_rs(symbol: str, benchmark="^GSPC"):
-#    stock = yf.Ticker(symbol).history(period="2y")
-#    index = yf.Ticker(benchmark).history(period="2y")
-#
-#    df = pd.DataFrame({
-#        "stock": stock["Close"],
-#        "index": index["Close"]
-#    }).dropna()
-#
-#    rs = df["stock"] / df["index"]
-#    rs_ma = rs.rolling(252).mean()  # 52 สัปดาห์
-#
-#    mansfield = ((rs / rs_ma) - 1) * 100
-#    return mansfield.tail(252)
-
-
-# ===============================
-# 📊 STAGE ANALYSIS ATTRIBUTES
-# ===============================
-
-def calculate_stage_attributes(symbol: str):
-    data = yf.Ticker(symbol).history(period="2y")
-
-    close = data["Close"]
-
-    ma30 = close.rolling(30).mean()
-    ma150 = close.rolling(150).mean()
-    ma200 = close.rolling(200).mean()
-
-    mansfield = calculate_mansfield_rs(symbol)
-
-    price = close.iloc[-1]
-    high_52w = close.tail(252).max()
-
-    slope200 = ma200.diff(20)
-
-    stage = "Stage 1 / Base"
-
-    if (
-        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-        and slope200.iloc[-1] > 0
-        and mansfield.iloc[-1] > 0
-        and price > 0.75 * high_52w
-    ):
-        stage = "Stage 2 – Uptrend"
-
-    elif price < ma200.iloc[-1]:
-        stage = "Stage 4 – Downtrend"
-
-    return {
-        "data": data.tail(252),
-        "ma30": ma30.tail(252),
-        "ma150": ma150.tail(252),
-        "ma200": ma200.tail(252),
-        "mansfield": mansfield,
-        "stage": stage
-    }
-
-
-
-def ema_slope(series, period: int = 10):
-    return series.diff(period).iloc[-1]
-
-
-# ==========================================================
-# Support / Resistance Engine
-# ==========================================================
-def _pivot_points(highs, lows, window: int = 5):
-    pivots = []
-    for i in range(window, len(highs) - window):
-        if highs[i] == max(highs[i - window:i + window + 1]):
-            pivots.append(highs[i])
-        elif lows[i] == min(lows[i - window:i + window + 1]):
-            pivots.append(lows[i])
-    return pivots
-
-
-#def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
-#def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
-#    pivots = _pivot_points(highs, lows, window)
-#    zones = []
-#
-#    for p in pivots:
-#        width = p * width_pct
-#        for z in zones:
-#            if abs(p - z["mid"]) <= width:
-#                z["mid"] = (z["mid"] + p) / 2
-#                z["strength"] += 1
-#                break
-#        else:
-#            zones.append({"mid": p, "strength": 1})
-#
-#    return sorted(zones, key=lambda z: z["strength"], reverse=True)
-
-
-#def split_support_resistance(zones, price, max_levels=2, min_strength=2):
-#    supports, resistances = [], []
-#
-#    for z in zones:
-#        if z["strength"] < min_strength:
-#            continue
-#        (supports if z["mid"] < price else resistances).append(z)
-#
-#    supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#    resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#
-#    return supports, resistances
-
-
-#def format_sr_zones(price, support, resistance):
-#    lines = ["📐 Support / Resistance (Zones)"]
-#
-#    if support:
-#        for s in support:
-#            dist = (price - s["mid"]) / price * 100
-#            lines.append(
-#                f"• Support: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}"
-#            )
-#    else:
-#        lines.append("• Support: ไม่มีระดับที่ชัดเจน")
-#
-#    if resistance:
-#        for r in resistance:
-#            dist = (r["mid"] - price) / price * 100
-#            lines.append(
-#                f"• Resistance: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}"
-#            )
-#    else:
-#        lines.append("• Resistance: ไม่มีระดับที่ชัดเจน")
-#
-#    return "\n".join(lines)
-
-
-
-#def format_support_resistance(price, supports, resistances):
-#    lines = ["📐 Support / Resistance (Auto)"]
-#
-#    for i, s in enumerate(supports, 1):
-#        dist = (price - s["mid"]) / price * 100
-#        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
-#
-#    for i, r in enumerate(resistances, 1):
-#        dist = (r["mid"] - price) / price * 100
-#        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
-#
-#    return "\n".join(lines)
-
-def calculate_support_resistance_zones(highs, lows, price, period=4, channel_pct=0.01):
-    pivots = _pivot_points(highs, lows, period)
-    channel_width = price * channel_pct
-    zones = []
-
-    for p in pivots:
-        found = False
-        for z in zones:
-            if abs(p - z["mid"]) <= channel_width:
-                z["mid"] = (z["mid"] + p) / 2
-                z["strength"] += 1
-                found = True
-                break
-        if not found:
-            zones.append({"mid": p, "strength": 1})
-
-    zones = [z for z in zones if z["strength"] >= 2]
-
-    support = sorted(
-        [z for z in zones if z["mid"] < price],
-        key=lambda x: abs(price - x["mid"])
-    )
-
-    resistance = sorted(
-        [z for z in zones if z["mid"] > price],
-        key=lambda x: abs(price - x["mid"])
-    )
-
-    return support[:5], resistance[:5]
-
-
-def calculate_rr(price, support, resistance):
-    if not support or not resistance:
-        return None, None, None
-
-    nearest_support = support[0]["mid"]
-    nearest_resistance = resistance[0]["mid"]
-
-    risk_pct = (price - nearest_support) / price * 100
-    reward_pct = (nearest_resistance - price) / price * 100
-
-    if risk_pct <= 0:
-        return None, None, None
-
-    rr = reward_pct / risk_pct if risk_pct > 0 else None
-    return risk_pct, reward_pct, rr
-
-
-# ==========================================================
-# Extended Hours Price
-# ==========================================================
-def get_extended_hours(symbol):
-
-    try:
-        t = yf.Ticker(symbol)
-        info = t.info
-
-        pre = info.get("preMarketPrice")
-        post = info.get("postMarketPrice")
-
-        return pre, post
-
-    except Exception:
-        return None, None
-
-
-# ==========================================================
-# Market Comparison
-# ==========================================================
-def one_month_return(symbol):
-    data = yf.Ticker(symbol).history(period="1mo")
-    if data.empty or len(data) < 2:
-        return None
-    return (data["Close"].iloc[-1] - data["Close"].iloc[0]) / data["Close"].iloc[0] * 100
-
-
-def format_market_comparison(symbol, stock, nasdaq, sp500):
-    compare = [
-        "🟢 ชนะ NASDAQ" if stock > nasdaq else "🔴 แพ้ NASDAQ",
-        "🟢 ชนะ S&P500" if stock > sp500 else "🔴 แพ้ S&P500",
-    ]
-
-    if stock > max(nasdaq, sp500):
-        strength = "🚀 แข็งแกร่งกว่าตลาด (Outperform)"
-    elif stock < min(nasdaq, sp500):
-        strength = "⚠️ อ่อนแอกว่าตลาด (Underperform)"
-    else:
-        strength = "⚖️ ใกล้เคียงตลาด"
-
-    return (
-        "🧪 เปรียบเทียบตลาด 1 เดือน\n"
-        f"  • {symbol}: {stock:+.2f}%\n"
-        f"  • NASDAQ: {nasdaq:+.2f}%\n"
-        f"  • S&P500: {sp500:+.2f}%\n"
-        f"{' | '.join(compare)}\n"
-        f"{strength}"
-    )
-
-
-# ==========================================================
-# Strategic Thesis (Rule-based)
-# ==========================================================
-def pro_investor_thesis(price, ema50, ema100, ema200, rsi, slope200, macd, signal, hist):
-    thesis = []
-
-    if price > ema50 > ema100 > ema200:
-        thesis.append("  📈 แนวโน้มขาขึ้นแข็งแกร่ง")
-        trend = "UP"
-    elif price < ema200:
-        thesis.append("  📉 แนวโน้มขาลง")
-        trend = "DOWN"
-    else:
-        thesis.append("  ⚖️ แนวโน้มแกว่งตัว / สะสมพลัง")
-        trend = "SIDE"
-
-    if rsi > 70:
-        thesis.append("  🔥 โมเมนตัมร้อนแรง แต่เริ่มตึง")
-    elif rsi < 30:
-        thesis.append("  ❄️ โมเมนตัมอ่อน รอสัญญาณกลับตัว")
-    else:
-        thesis.append("  ✅ โมเมนตัมปกติ เหมาะกับการสะสม")
-
-    if macd > signal and hist > 0:
-        thesis.append(" 🚀 โมเมนตัมขาขึ้นแข็งแกร่ง และขาขึ้นยืนยัน")
-    elif macd < signal and hist < 0:
-        thesis.append(" ⚠️ โมเมนตัมอ่อนแรง ระวังแรงขาย")
-    else:
-        thesis.append(" ⏳ โมเมนตัมก้ำกึ่ง รอสัญญาณชัด")
-
-    thesis.append(
-        "  📐 EMA200 ชี้ขึ้น แนวโน้มระยะยาวยังแข็งแกร่ง"
-        if slope200 > 0
-        else "  📐 EMA200 แบน/ลง ระวังสัญญาณหลอก (False Rally)"
-    )
-
-    if trend == "UP" and 40 <= rsi <= 60 and price <= ema50:
-        thesis.append("  🟢 กลยุทธ์: ทยอยสะสม (Buy on Weakness)")
-    elif trend == "UP" and rsi > 70:
-        thesis.append("  🟡 กลยุทธ์: ถือ / รอย่อ")
-    elif trend == "DOWN":
-        thesis.append("  🔴 กลยุทธ์: หลีกเลี่ยง / รอฐานใหม่")
-    else:
-        thesis.append("  🟡 กลยุทธ์: รอดู Confirmation")
-
-    return "\n".join(thesis)
-
-
-# ==========================================================
-# AI Thesis
-# ==========================================================
-def _format_sr_for_prompt(supports, resistances):
-    lines = []
-    if supports:
-        lines.append("Supports: " + ", ".join(f"{s['mid']:.0f}" for s in supports))
-    if resistances:
-        lines.append("Resistances: " + ", ".join(f"{r['mid']:.0f}" for r in resistances))
-    return "\n".join(lines)
-
-
-def ai_thesis_generator(symbol, price, ema50, ema100, ema200, rsi,
-                        macd, signal, hist, supports, resistances):
-
-    sr_text = _format_sr_for_prompt(supports, resistances)
-
-    prompt = f"""
-You are a professional fund manager.
-
-Stock: {symbol}
-Price: {price:.2f}
-
-Market structure:
-EMA levels: {ema50:.0f}, {ema100:.0f}, {ema200:.0f}
-
-Momentum context:
-RSI {rsi:.2f}
-MACD {macd:.2f}, Signal {signal:.2f}, Hist {hist:.2f}
-
-Key price zones:
-{sr_text}
-
-Write a concise Thai investment thesis in bullet points using this structure:
-1) Market structure (trend & price behavior)
-2) Risk & opportunity around key price zones
-3) Action bias (accumulate / wait / avoid)
-
-Do not mention indicator names explicitly.
-Write in Thai.
-Max 120 words.
-"""
-
-    prompt0 = f"""
-You are a professional institutional investor.
-
-Asset: {symbol}
-Current price: {price:.2f}
-
-Reference price levels:
-• Short-term: {ema50:.2f}
-• Medium-term: {ema100:.2f}
-• Long-term: {ema200:.2f}
-
-Momentum context:
-• Relative strength level: {rsi:.1f}
-• Momentum balance: {macd - signal:+.3f}
-
-Key price zones:
-{sr_text}
-
-Instructions:
-Write a concise Thai investment thesis in bullet points using this structure:
-
-1) Price positioning
-- Describe where the current price stands relative to key reference levels
-
-2) Downside risk
-- Identify key downside risk levels and what they imply
-
-3) Upside opportunity
-- Describe upside potential and nearby resistance areas
-
-4) Action bias
-- Recommend one clear stance: Accumulate / Hold / Wait / Reduce
-
-Rules:
-• Do not mention indicator names
-• Use price levels and numbers
-• Be professional and neutral
-• Write in Thai.
-• Max 120 words
-"""
-
-    res = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a disciplined institutional investor."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
-    )
-
-    return res.choices[0].message.content
-
-
-# ==========================================================
-# Core Analysis Pipeline
-# ==========================================================
-def analyze(symbol: str) -> dict:
-    data = yf.Ticker(symbol).history(period="3y")
-
-    if data.empty or len(data) < 50:
-        raise ValueError("SYMBOL_NOT_FOUND")
-
-    # =========================
-    # Full data (for trend / EMA / momentum)
-    # =========================
-    close = data["Close"]
-
-    # =========================
-    # 1Y data (for Support / Resistance)
-    # =========================
-    data_1y = data.tail(252)   # ~252 trading days ≈ 1 year
-    highs_1y = data_1y["High"].values
-    lows_1y = data_1y["Low"].values
-
-    price = close.iloc[-1]
-    change_pct = (price - close.iloc[-2]) / close.iloc[-2] * 100
-
-    # NEW
-    pre_market, post_market = get_extended_hours(symbol)
-
-    # =========================
-    # Extended Hours Gap %
-    # =========================
-    pre_gap_pct = None
-    post_gap_pct = None
-
-    if pre_market:
-        pre_gap_pct = (pre_market - price) / price * 100
-
-    if post_market:
-        post_gap_pct = (post_market - price) / price * 100
-
-    ema50 = close.ewm(span=50, adjust=False).mean().iloc[-1]
-    ema100 = close.ewm(span=100, adjust=False).mean().iloc[-1]
-
-    ema200_series = close.ewm(span=200, adjust=False).mean()
-    ema200 = ema200_series.iloc[-1]
-
-    rsi = calculate_rsi(close).iloc[-1]
-    slope200 = ema_slope(ema200_series)
-
-    macd, signal, hist = calculate_macd(close)
-
-    # ✅ SR ใช้ข้อมูล 1 ปี
-    #zones = calculate_support_resistance(highs_1y, lows_1y)
-    #supports, resistances = split_support_resistance(zones, price)
-    supports, resistances = get_sr_zones_1y(data, price)
-
-
-    return {
-        "price": price,
-        "change_pct": change_pct,
-        "pre_market": pre_market,
-        "post_market": post_market,
-        "pre_gap_pct": pre_gap_pct,
-        "post_gap_pct": post_gap_pct,
-        "ema50": ema50,
-        "ema100": ema100,
-        "ema200": ema200,
-        "slope200": slope200,
-        "rsi": rsi,
-        "macd": macd,
-        "signal": signal,
-        "hist": hist,
-        "supports": supports,
-        "resistances": resistances,
-        "stock_1m": one_month_return(symbol),
-        "nasdaq_1m": one_month_return("^IXIC"),
-        "sp500_1m": one_month_return("^GSPC"),
-    }
-
 # ==========================================================
 # Chart Style (Bloomberg / TradingView)
 # ==========================================================
@@ -1044,7 +484,6 @@ def plot_sata(symbol: str):
         color="white"
     )
 
-
     # ===== Panel 1: Mansfield RS =====
     ax1.plot(rs_df.index, rs_df["rs"], color="#00E5FF", linewidth=1.8)
     ax1.plot(rs_df.index, rs_df["rs_ma"], linestyle="--", color="#9E9E9E", linewidth=1.4, alpha=0.8)
@@ -1103,8 +542,6 @@ def plot_sata(symbol: str):
     buf.seek(0)
 
     return buf
-
-
 
 # ==========================================================
 # Telegram Handlers
@@ -1293,8 +730,6 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not results:
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
-
-    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -1524,8 +959,6 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
 
-        import math
-
         chunk_size = 20
         total_items = len(results)
         total_pages = math.ceil(total_items / chunk_size)
@@ -1584,7 +1017,6 @@ def main():
     app.add_handler(CommandHandler("help", cmd_help))
 
     app.add_handler(CommandHandler("im1", cmd_im1))
-
     app.add_handler(CommandHandler("stage2scan", cmd_stage_scan))
 
     app.run_polling()
