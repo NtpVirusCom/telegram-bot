@@ -571,14 +571,24 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
         symbols = get_all_symbols()
         context.user_data["mode"] = "im1"        
-        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+        # ✅ รันแบบ async background
+        context.application.create_task(
+            run_scan(query, symbols, min_streak=3, mode="below",
+                     title="🆕 Impulse GREEN Streak 1–2 วัน")
+        )
+        #await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
     elif data == "menu_stage_scan":
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
         context.user_data["symbols"] = symbols
         context.user_data["mode"] = "stage2scan"   # ✅ เพิ่มบรรทัดนี้
-        await cmd_stage_scan(query, context)
+
+        context.application.create_task(
+            cmd_stage_scan(update, context)
+        )
+        #await cmd_stage_scan(query, context)
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -663,7 +673,8 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chart = plot_sata(symbol)
 
     except Exception as e:
-        await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+        #await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+        await msg.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
         return
 
 
@@ -715,7 +726,8 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 
 async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+    #await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+    await msg.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
 
     symbols = get_all_symbols()
     await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
@@ -724,18 +736,21 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
-    # ✅ รองรับทั้ง callback และ message
-    if hasattr(update, "message") and update.message:
+    # ✅ รองรับ callback + message
+    if update.message:
         msg = update.message
+    elif update.callback_query:
+        msg = update.callback_query.message
     else:
-        msg = update.message  # callback ก็ใช้ message ได้
+        return
 
     symbols = context.user_data.get("symbols")
 
     results = scan_stage2_market(symbols)
 
     if not results:
-        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        #await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        await msg.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
     chunk = 20
@@ -781,13 +796,15 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if p == pages - 1:
 
-            await update.message.reply_text(
+            #await update.message.reply_text(
+            await msg.reply_text(    
                 text,
                 reply_markup=main_menu_keyboard()
             )
 
         else:
-            await update.message.reply_text(text)
+            #await update.message.reply_text(text)
+            await msg.reply_text(text)
 
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
@@ -949,11 +966,12 @@ def scan_stage2_market(symbols):
 
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
-    # ✅ แยก message กับ callback ให้ชัด
-    if hasattr(update_or_query, "message"):  
+    if hasattr(update_or_query, "message") and update_or_query.message:
         msg = update_or_query.message
+    elif hasattr(update_or_query, "callback_query"):
+        msg = update_or_query.callback_query.message
     else:
-        msg = update_or_query.message
+        return
 
     try:
         results = scan_impulse_green_streak(
