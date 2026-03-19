@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import requests
 import yfinance as yf
+import asyncio
 from io import StringIO
 from openai import OpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -134,6 +135,7 @@ def calculate_mansfield_rs(symbol: str, benchmark: str = "^GSPC", ma_length: int
     df["rs_ma"] = df["rs"].rolling(ma_length).mean()
 
     return df.tail(104)  # ~2 ปีล่าสุด
+
 
 
 # ==========================================================
@@ -746,7 +748,12 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     symbols = context.user_data.get("symbols")
 
-    results = scan_stage2_market(symbols)
+    #results = scan_stage2_market(symbols)
+
+    results = await asyncio.to_thread(
+        scan_stage2_market,
+        symbols
+    )
 
     if not results:
         #await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
@@ -974,10 +981,18 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
         return
 
     try:
-        results = scan_impulse_green_streak(
+        #results = scan_impulse_green_streak(
+        #    symbols,
+        #    min_streak=min_streak,
+        #    mode=mode
+        #)
+
+        results = await asyncio.to_thread(
+            scan_impulse_green_streak,
             symbols,
-            min_streak=min_streak,
-            mode=mode
+            min_streak,
+            3,      # lookback_months
+            mode
         )
 
         if not results:
