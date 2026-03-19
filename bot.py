@@ -23,7 +23,7 @@ def main_menu_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
+            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
@@ -577,6 +577,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
         context.user_data["symbols"] = symbols
+        context.user_data["mode"] = "stage2scan"   # ✅ เพิ่มบรรทัดนี้
         await cmd_stage_scan(query, context)
 
     elif data == "menu_help":
