@@ -1,4 +1,4 @@
-# ========================================================v.133==
+# ========================================================v.132==
 # Imports & Config
 # ==========================================================
 import os
@@ -8,8 +8,6 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import math
 import io
-import requests
-from io import StringIO
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 from openai import OpenAI
@@ -384,64 +382,6 @@ def detect_stage_pro(df, sata):
         stage = "Stage 3"
 
     return stage
-
-
-def detect_weinstein_stage(df):
-
-    close = df["Close"]
-
-    ma10 = close.rolling(10).mean()
-    ma30 = close.rolling(30).mean()
-    ma40 = close.rolling(40).mean()
-
-    price = close.iloc[-1]
-
-    ma40_now = ma40.iloc[-1]
-    ma40_prev = ma40.iloc[-5]
-
-    slope40 = ma40_now - ma40_prev
-
-    # ----------------------
-    # Stage 2
-    # ----------------------
-    if price > ma40_now and slope40 > 0:
-
-        base_high = df["High"].rolling(30).max().iloc[-2]
-
-        if price > base_high:
-            return "Stage 2A — Breakout 🚀"
-        else:
-            return "Stage 2B — Advancing Trend"
-
-    # ----------------------
-    # Stage 4
-    # ----------------------
-    if price < ma40_now and slope40 < 0:
-
-        base_low = df["Low"].rolling(30).min().iloc[-2]
-
-        if price < base_low:
-            return "Stage 4A — Breakdown 🔻"
-        else:
-            return "Stage 4B — Declining"
-
-    # ----------------------
-    # Stage 1
-    # ----------------------
-    if abs(slope40) < ma40_now * 0.002:
-
-        if price < ma40_now:
-            return "Stage 1A — Bottoming"
-        else:
-            return "Stage 1B — Base Building"
-
-    # ----------------------
-    # Stage 3
-    # ----------------------
-    if price > ma40_now:
-        return "Stage 3A — Topping"
-
-    return "Stage 3B — Distribution"
 
 
 def detect_base(df):
@@ -2324,8 +2264,7 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         df, sata, rs = calculate_sata(symbol)
 
         latest_score = int(sata["score"].iloc[-1])
-        #stage_label = detect_stage_pro(df, sata)
-        stage_label = detect_weinstein_stage(df)
+        stage_label = detect_stage_pro(df, sata)
         is_base = detect_base(df)
         is_breakout = detect_breakout(df)
 
@@ -2357,9 +2296,8 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     caption_text = f"""
-    📊 {symbol} — Weinstein Stage Analysis
 
-    Stage: {stage_label}
+    📊 {symbol} — Stage Analysis
 
     SATA Score: {latest_score}/10
     Base Forming: {"Yes" if is_base else "No"}
@@ -2416,7 +2354,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    #import math
+    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2493,7 +2431,7 @@ def count_green_streak(sh_series: pd.Series) -> int:
 
 
 def get_sp500_symbols():
-    #import pandas as pd
+    import pandas as pd
 
     url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
     df = pd.read_csv(url)
@@ -2504,43 +2442,22 @@ def get_sp500_symbols():
     return symbols
 
 
-#NASDAQ100_SYMBOLS = None
-#
-#def get_nasdaq100_symbols():
-#    global NASDAQ100_SYMBOLS
-#
-#    if NASDAQ100_SYMBOLS:
-#        return NASDAQ100_SYMBOLS
-#
-#    #import pandas as pd
-#    #import requests
-#    #from io import StringIO
-#
-#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-#    headers = {"User-Agent": "Mozilla/5.0"}
-#
-#    r = requests.get(url, headers=headers)
-#    tables = pd.read_html(StringIO(r.text))
-#
-#    df = tables[4]
-#
-#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-#    return NASDAQ100_SYMBOLS
-
-
 def get_nasdaq100_symbols():
+    import pandas as pd
 
-    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    df = pd.read_csv(url)
 
-    r = requests.get(url, headers=headers)
-    tables = pd.read_html(StringIO(r.text))
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Ticker"].dropna().tolist()
 
-    df = tables[4]
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
 
-    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+    #return symbols[:100]
     return symbols
-    
+
 
 def get_all_symbols():
     """
