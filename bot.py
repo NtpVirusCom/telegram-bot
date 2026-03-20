@@ -35,6 +35,10 @@ def main_menu_keyboard():
             InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
         ],
         [
+            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
+        ],
+        [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
         ],
     ]
@@ -54,6 +58,11 @@ def post_result_keyboard(symbol: str):
         [
             InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
+        ],
+        [
+            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
@@ -83,12 +92,25 @@ START_TEXT = """
 ออกแบบในมุมมองนักลงทุนมืออาชีพ
 
 🔍 ฟีเจอร์หลัก
+• Technical Analysis (rule-based)
+• AI Investment Thesis (institutional tone)
+• Support / Resistance อัตโนมัติ
+• เปรียบเทียบกับตลาด (NASDAQ / S&P500)
 
 🚀 คำสั่งเริ่มต้น
+/ta <symbol>  วิเคราะห์เชิงเทคนิค
+/ai <symbol>  AI Investment Thesis
+/sr <symbol>  Support / Resistance
+/ch <symbol>  แสดงกราฟราคา
 
 📌 ตัวอย่าง
+/ta aapl
+/ai msft
+/sr nvda
+/ch pltr
 
 ℹ️ ดูคำสั่งทั้งหมด
+/help
 
 ⚠️ เพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
 """
@@ -99,14 +121,44 @@ HELP_TEXT = """
 ━━━━━━━━━━
 🟢 CORE
 ━━━━━━━━━━
+/ta <symbol>
+• Technical Analysis (rule-based)
+• Trend, Momentum, Support / Resistance
+• Market comparison + Strategic thesis
 
+/ai <symbol>
+• AI Investment Thesis
+• มุมมองเชิงกลยุทธ์แบบนักลงทุนสถาบัน
+• สรุป Risk / Opportunity / Action bias
+
+/im1
+• Scan Impulse GREEN 1–2 วัน
+
+/im2
+• Scan Impulse GREEN ≥ 3 วัน
 ━━━━━━━━━━
 🟡 DETAIL (coming / optional)
 ━━━━━━━━━━
+/levels <symbol>
+• Key Support / Resistance levels
+
+/trend <symbol>
+• Market structure & trend direction
+
+/momentum <symbol>
+• RSI & momentum regime
 
 ━━━━━━━━━━
 🔵 AI PRO (future-ready)
 ━━━━━━━━━━
+/bias <symbol>
+• Action bias: Accumulate / Hold / Wait / Reduce
+
+/risk <symbol>
+• Downside risk & scenario analysis
+
+/outlook <symbol>
+• Medium-term outlook (1–3 months)
 
 ━━━━━━━━━━
 ⚙️ UTILITY
@@ -116,9 +168,12 @@ HELP_TEXT = """
 
 /help
 • ดูรายการคำสั่งทั้งหมด
+
 ━━━━━━━━━━
 📌 ตัวอย่าง
 ━━━━━━━━━━
+/ta msft
+/ai tsla
 
 ⚠️ ข้อมูลเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
 """
@@ -1439,12 +1494,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    #await query.answer()
+    await query.answer()
 
-    try:
-        await query.answer()
-    except BadRequest:
-        pass
+    #try:
+    #    await query.answer()
+    #except BadRequest:
+    #    pass
 
     data = query.data
 
@@ -1475,6 +1530,20 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_stage":
         context.user_data["mode"] = "stage"
         await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
+
+    elif data == "menu_im1":
+        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+        symbols = get_all_symbols()
+        context.user_data["mode"] = "im1"        
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
+        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+    elif data == "menu_stage_scan":
+        await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+        symbols = get_all_symbols()
+        context.user_data["symbols"] = symbols
+        await cmd_stage_scan(query, context)
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -1516,6 +1585,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_stage(query, context)
 
+
+
 # ==========================================================
 # TEXT ROUTER (เพิ่ม impulse)
 # ==========================================================
@@ -1541,9 +1612,515 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif mode == "stage":
         await cmd_stage(update, context)
 
+    elif mode == "im1":
+        await cmd_im1(update, context)
+
+    elif mode == "stage2scan":
+        await cmd_stage_scan(update, context)
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
     context.user_data["last_symbol"] = symbol
+
+# ===============================
+# ADVANCED PRO+ DETECTION ENGINE
+# ===============================
+def detect_rs_new_high(rs_series, lookback=60):
+    recent_high = rs_series.tail(lookback).max()
+    return rs_series.iloc[-1] >= recent_high
+
+def detect_strong_stage2(score, breakout):
+    return score >= 8 and breakout
+
+# ==========================================================
+# IMACD SCAN COMMANDS (/im1 /im2)
+# ==========================================================
+
+async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+
+
+
+
+
+
+
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+
+
+
+
+
+
+
+
+
+    symbols = context.user_data.get("symbols")
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+   
+
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            # breakout signal
+            if r["breakout"]:
+                text += " | 🚀"
+            else:
+                text += ""
+
+            # RS signal
+            if r["rs"]:
+                text += " | RS↑"
+
+            text += "\n"
+
+            attrs = [
+                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
+                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
+            ]
+
+            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
+
+            text += f"   SATA: {attr_text}\n"
+
+        if p == pages - 1:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=main_menu_keyboard()
+            )
+
+
+        else:
+            await update.message.reply_text(text)
+
+
+def count_green_streak(sh_series: pd.Series) -> int:
+    streak = 0
+    #for val in reversed(sh_series):
+    for val in sh_series.iloc[::-1]:
+        if val > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+def get_sp500_symbols():
+
+    url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+    df = pd.read_csv(url)
+
+    symbols = df["Symbol"].dropna().tolist()
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    return symbols
+
+def get_nasdaq100_symbols():
+    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    df = pd.read_csv(url)
+
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Ticker"].dropna().tolist()
+
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    #return symbols[:100]
+
+    #url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    #headers = {"User-Agent": "Mozilla/5.0"}
+    #
+    #r = requests.get(url, headers=headers)
+    #tables = pd.read_html(StringIO(r.text))
+    #
+    #df = tables[4]
+    #
+    #symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+    return symbols
+
+def get_all_symbols():
+    """
+    รวมสองตลาด + ลบตัวซ้ำ
+    """
+    sp500 = get_sp500_symbols()
+    nasdaq = get_nasdaq100_symbols()
+
+    symbols = list(set(sp500 + nasdaq))
+
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+    print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+
+    return symbols
+
+# ===============================
+# ADVANCED PRO+ DETECTION ENGINE
+# ===============================
+def detect_rs_new_high(rs_series, lookback=60):
+    recent_high = rs_series.tail(lookback).max()
+    return rs_series.iloc[-1] >= recent_high
+
+def detect_strong_stage2(score, breakout):
+    return score >= 8 and breakout
+
+# ==========================================================
+# IMACD SCAN COMMANDS (/im1 /im2)
+# ==========================================================
+
+async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+
+
+
+
+
+
+
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+
+
+
+
+
+
+
+
+
+    symbols = context.user_data.get("symbols")
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+   
+
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            # breakout signal
+            if r["breakout"]:
+                text += " | 🚀"
+            else:
+                text += ""
+
+            # RS signal
+            if r["rs"]:
+                text += " | RS↑"
+
+            text += "\n"
+
+            attrs = [
+                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
+                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
+            ]
+
+            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
+
+            text += f"   SATA: {attr_text}\n"
+
+        if p == pages - 1:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=main_menu_keyboard()
+            )
+
+
+        else:
+            await update.message.reply_text(text)
+
+
+def count_green_streak(sh_series: pd.Series) -> int:
+    streak = 0
+    #for val in reversed(sh_series):
+    for val in sh_series.iloc[::-1]:
+        if val > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+def get_sp500_symbols():
+
+    url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+    df = pd.read_csv(url)
+
+    symbols = df["Symbol"].dropna().tolist()
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    return symbols
+
+def get_nasdaq100_symbols():
+    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    df = pd.read_csv(url)
+
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Ticker"].dropna().tolist()
+
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    #return symbols[:100]
+
+    #url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    #headers = {"User-Agent": "Mozilla/5.0"}
+    #
+    #r = requests.get(url, headers=headers)
+    #tables = pd.read_html(StringIO(r.text))
+    #
+    #df = tables[4]
+    #
+    #symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+    return symbols
+
+def get_all_symbols():
+    """
+    รวมสองตลาด + ลบตัวซ้ำ
+    """
+    sp500 = get_sp500_symbols()
+    nasdaq = get_nasdaq100_symbols()
+
+    symbols = list(set(sp500 + nasdaq))
+
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+    print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+
+    return symbols
+
+def scan_impulse_green_streak(
+    symbols: list,
+    min_streak: int = 3,
+    lookback_months: int = 3,
+    mode: str = "above"  # "above" หรือ "below"
+):
+    results = []
+
+    for symbol in symbols:
+        try:
+            data = yf.Ticker(symbol).history(
+                period=f"{lookback_months}mo"
+            )
+
+            if data.empty or len(data) < 50:
+                continue
+
+            md, sb, sh = calculate_impulse_macd(data)
+
+            streak = count_green_streak(sh.dropna())
+
+            # ✅ เงื่อนไขใหม่
+            if (mode == "above" and streak >= min_streak) or \
+               (mode == "below" and 1 <= streak < min_streak):
+
+
+                results.append({
+                    "symbol": symbol,
+                    "streak": streak,
+                    "price": data["Close"].iloc[-1]
+                })
+
+        except:
+            continue
+
+    # 🔽 เรียงน้อย → มาก
+    results = sorted(results, key=lambda x: x["streak"])
+
+    return results
+
+# ==========================================================
+# STAGE SCAN ENGINE
+# ==========================================================
+
+def scan_stage2_market(symbols):
+
+    results = []
+
+    for symbol in symbols:
+
+        try:
+
+            df, sata, rs = calculate_sata(symbol)
+
+            if len(df) < 100:
+                continue
+
+            latest_score = sata["score"].iloc[-1]
+
+            stage = detect_stage_pro(df, sata)
+
+            base = detect_base(df)
+
+            breakout = detect_breakout(df)
+
+            rs_new_high = detect_rs_new_high(rs)
+
+            strong_stage2 = detect_strong_stage2(latest_score, breakout)
+
+            # ===== เงื่อนไข Stage 2 Screener =====
+            #if stage == "Stage 2" and strong_stage2:
+            #if stage == "Stage 2":
+            #if stage == strong_stage2:
+            #if stage == breakout:
+            if stage == "Stage 2" and latest_score >= 6:
+
+                price = df["Close"].iloc[-1]
+
+                latest_attr = sata.iloc[-1]
+
+                results.append({
+                    "symbol": symbol,
+                    "score": int(latest_score),
+                    "price": price,
+                    "breakout": breakout,
+                    "rs": rs_new_high,
+
+                    # SATA Attributes
+                    "a1": int(latest_attr["a1"]),
+                    "a2": int(latest_attr["a2"]),
+                    "a3": int(latest_attr["a3"]),
+                    "a4": int(latest_attr["a4"]),
+                    "a5": int(latest_attr["a5"]),
+                    "a6": int(latest_attr["a6"]),
+                    "a7": int(latest_attr["a7"]),
+                    "a8": int(latest_attr["a8"]),
+                    "a9": int(latest_attr["a9"]),
+                    "a10": int(latest_attr["a10"]),
+                })
+
+        except:
+            continue
+
+    # เรียงจาก SATA Score สูงสุด
+    results = sorted(results, key=lambda x: x["score"], reverse=True)
+
+    return results
+
+async def run_scan(update_or_query, symbols, min_streak, mode, title):
+
+    # ✅ แยก message กับ callback ให้ชัด
+    if hasattr(update_or_query, "message"):  
+        # มาจาก callback_query
+        msg = update_or_query.message
+    else:
+        # มาจาก update.message
+        msg = update_or_query.message
+
+    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
+
+    try:
+        results = scan_impulse_green_streak(
+            symbols,
+            min_streak=min_streak,
+            mode=mode
+        )
+
+
+
+
+
+
+        if not results:
+            await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
+            return
+
+        chunk_size = 20
+        total_items = len(results)
+        total_pages = math.ceil(total_items / chunk_size)
+
+        for page in range(total_pages):
+            start = page * chunk_size
+            end = start + chunk_size
+            chunk = results[start:end]
+
+            text = f"{title} ({page+1}/{total_pages})\n"
+
+            if page == 0:
+                text += f"จำนวนทั้งหมด {total_items} หุ้น\n"
+
+            text += "\n"
+
+            for r in chunk:
+                text += (
+                    f"🟢 {r['symbol']}  "
+                    f"| {r['streak']} วัน "
+                    f"| ${r['price']:.2f}\n"
+                )
+
+            # ✅ เฉพาะหน้าสุดท้าย ใส่เมนู
+            if page == total_pages - 1:
+                await msg.reply_text(
+                    text,
+                    reply_markup=main_menu_keyboard()
+                )
+            else:
+                await msg.reply_text(text)
+
+    except Exception as e:
+        await msg.reply_text(f"❌ scan error: {str(e)}")
+
+
+
+
+
+
 
 async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
@@ -1579,10 +2156,6 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         d['signal'].iloc[-1],
         d['hist'].iloc[-1],
     )
-
-    #text = (
-    #    f"📊 {symbol}\n"
-    #    f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
 
     text = (
         f"📊 {symbol}\n"
@@ -1850,293 +2423,6 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ==========================================================
-# IMACD SCAN COMMANDS (/im1 /im2)
-# ==========================================================
-async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
-
-    symbols = get_all_symbols()
-    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
-
-async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
-
-    symbols = get_all_symbols()
-    await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
-
-async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbols = context.user_data.get("symbols")
-
-    results = scan_stage2_market(symbols)
-
-    if not results:
-        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
-        return
-
-    chunk = 20
-    pages = math.ceil(len(results) / chunk)
-
-    for p in range(pages):
-
-        part = results[p*chunk:(p+1)*chunk]
-
-        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
-
-        if p == 0:
-            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
-
-        for r in part:
-
-            text += (
-                f"🟢 {r['symbol']} "
-                f"| Score {r['score']}/10 "
-                f"| ${r['price']:.2f}"
-            )
-
-            # breakout signal
-            if r["breakout"]:
-                text += " | 🚀"
-            else:
-                text += ""
-
-            # RS signal
-            if r["rs"]:
-                text += " | RS↑"
-
-            text += "\n"
-
-            attrs = [
-                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
-                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
-            ]
-
-            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
-
-            text += f"   SATA: {attr_text}\n"
-
-        if p == pages - 1:
-
-            await update.message.reply_text(
-                text,
-                reply_markup=main_menu_keyboard()
-            )
-
-        else:
-            await update.message.reply_text(text)
-
-def count_green_streak(sh_series: pd.Series) -> int:
-    streak = 0
-    #for val in reversed(sh_series):
-    for val in sh_series.iloc[::-1]:
-        if val > 0:
-            streak += 1
-        else:
-            break
-    return streak
-
-def get_sp500_symbols():
-
-    url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
-    df = pd.read_csv(url)
-
-    symbols = df["Symbol"].dropna().tolist()
-    symbols = [str(s).replace(".", "-") for s in symbols]
-
-    return symbols
-
-def get_nasdaq100_symbols():
-
-    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    r = requests.get(url, headers=headers)
-    tables = pd.read_html(StringIO(r.text))
-
-    df = tables[4]
-
-    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-    return symbols
-
-def get_all_symbols():
-    """
-    รวมสองตลาด + ลบตัวซ้ำ
-    """
-    sp500 = get_sp500_symbols()
-    nasdaq = get_nasdaq100_symbols()
-
-    symbols = list(set(sp500 + nasdaq))
-
-    #print(f"Loaded symbols: {len(symbols)} ตัว")
-    print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
-
-    return symbols
-
-def scan_impulse_green_streak(
-    symbols: list,
-    min_streak: int = 3,
-    lookback_months: int = 3,
-    mode: str = "above"  # "above" หรือ "below"
-):
-    results = []
-
-    for symbol in symbols:
-        try:
-            data = yf.Ticker(symbol).history(
-                period=f"{lookback_months}mo"
-            )
-
-            if data.empty or len(data) < 50:
-                continue
-
-            md, sb, sh = calculate_impulse_macd(data)
-
-            streak = count_green_streak(sh.dropna())
-
-            # ✅ เงื่อนไขใหม่
-            if (mode == "above" and streak >= min_streak) or \
-               (mode == "below" and 1 <= streak < min_streak):
-
-
-                results.append({
-                    "symbol": symbol,
-                    "streak": streak,
-                    "price": data["Close"].iloc[-1]
-                })
-
-        except:
-            continue
-
-    # 🔽 เรียงน้อย → มาก
-    results = sorted(results, key=lambda x: x["streak"])
-
-    return results
-
-# ==========================================================
-# STAGE SCAN ENGINE
-# ==========================================================
-def scan_stage2_market(symbols):
-
-    results = []
-
-    for symbol in symbols:
-
-        try:
-
-            df, sata, rs = calculate_sata(symbol)
-
-            if len(df) < 100:
-                continue
-
-            latest_score = sata["score"].iloc[-1]
-
-            stage = detect_stage_pro(df, sata)
-
-            base = detect_base(df)
-
-            breakout = detect_breakout(df)
-
-            rs_new_high = detect_rs_new_high(rs)
-
-            strong_stage2 = detect_strong_stage2(latest_score, breakout)
-
-            # ===== เงื่อนไข Stage 2 Screener =====
-            #if stage == "Stage 2" and strong_stage2:
-            #if stage == "Stage 2":
-            #if stage == strong_stage2:
-            #if stage == breakout:
-            if stage == "Stage 2" and latest_score >= 6:
-
-                price = df["Close"].iloc[-1]
-
-                latest_attr = sata.iloc[-1]
-
-                results.append({
-                    "symbol": symbol,
-                    "score": int(latest_score),
-                    "price": price,
-                    "breakout": breakout,
-                    "rs": rs_new_high,
-
-                    # SATA Attributes
-                    "a1": int(latest_attr["a1"]),
-                    "a2": int(latest_attr["a2"]),
-                    "a3": int(latest_attr["a3"]),
-                    "a4": int(latest_attr["a4"]),
-                    "a5": int(latest_attr["a5"]),
-                    "a6": int(latest_attr["a6"]),
-                    "a7": int(latest_attr["a7"]),
-                    "a8": int(latest_attr["a8"]),
-                    "a9": int(latest_attr["a9"]),
-                    "a10": int(latest_attr["a10"]),
-                })
-
-        except:
-            continue
-
-    # เรียงจาก SATA Score สูงสุด
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
-
-    return results
-
-async def run_scan(update_or_query, symbols, min_streak, mode, title):
-
-    # ✅ แยก message กับ callback ให้ชัด
-    if hasattr(update_or_query, "message"):  
-        # มาจาก callback_query
-        msg = update_or_query.message
-    else:
-        # มาจาก update.message
-        msg = update_or_query.message
-
-    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
-
-    try:
-        results = scan_impulse_green_streak(
-            symbols,
-            min_streak=min_streak,
-            mode=mode
-        )
-
-        if not results:
-            await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
-            return
-
-        chunk_size = 20
-        total_items = len(results)
-        total_pages = math.ceil(total_items / chunk_size)
-
-        for page in range(total_pages):
-            start = page * chunk_size
-            end = start + chunk_size
-            chunk = results[start:end]
-
-            text = f"{title} ({page+1}/{total_pages})\n"
-
-            if page == 0:
-                text += f"จำนวนทั้งหมด {total_items} หุ้น\n"
-
-            text += "\n"
-
-            for r in chunk:
-                text += (
-                    f"🟢 {r['symbol']}  "
-                    f"| {r['streak']} วัน "
-                    f"| ${r['price']:.2f}\n"
-                )
-
-            # ✅ เฉพาะหน้าสุดท้าย ใส่เมนู
-            if page == total_pages - 1:
-                await msg.reply_text(
-                    text,
-                    reply_markup=main_menu_keyboard()
-                )
-            else:
-                await msg.reply_text(text)
-
-    except Exception as e:
-        await msg.reply_text(f"❌ scan error: {str(e)}")
-
-# ==========================================================
 # App Bootstrap
 # ==========================================================
 logging.basicConfig(
@@ -2165,6 +2451,9 @@ def main():
 
     app.add_handler(CommandHandler("man", cmd_man))
     app.add_handler(CommandHandler("stage", cmd_stage))
+
+    app.add_handler(CommandHandler("im1", cmd_im1))
+    app.add_handler(CommandHandler("stage2scan", cmd_stage_scan))
 
     app.run_polling()
 
