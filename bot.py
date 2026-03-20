@@ -1,4 +1,4 @@
-# ========================================================v.134==
+# ========================================================v.133==
 # Imports & Config
 # ==========================================================
 import os
@@ -409,9 +409,9 @@ def detect_weinstein_stage(df):
         base_high = df["High"].rolling(30).max().iloc[-2]
 
         if price > base_high:
-            return "2A — Breakout 🚀"
+            return "Stage 2A — Breakout 🚀"
         else:
-            return "2B — Advancing Trend"
+            return "Stage 2B — Advancing Trend"
 
     # ----------------------
     # Stage 4
@@ -421,9 +421,9 @@ def detect_weinstein_stage(df):
         base_low = df["Low"].rolling(30).min().iloc[-2]
 
         if price < base_low:
-            return "4A — Breakdown 🔻"
+            return "Stage 4A — Breakdown 🔻"
         else:
-            return "4B — Declining"
+            return "Stage 4B — Declining"
 
     # ----------------------
     # Stage 1
@@ -431,17 +431,17 @@ def detect_weinstein_stage(df):
     if abs(slope40) < ma40_now * 0.002:
 
         if price < ma40_now:
-            return "1A — Bottoming"
+            return "Stage 1A — Bottoming"
         else:
-            return "1B — Base Building"
+            return "Stage 1B — Base Building"
 
     # ----------------------
     # Stage 3
     # ----------------------
     if price > ma40_now:
-        return "3A — Topping"
+        return "Stage 3A — Topping"
 
-    return "3B — Distribution"
+    return "Stage 3B — Distribution"
 
 
 def detect_base(df):
@@ -2357,7 +2357,7 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     caption_text = f"""
-    📊 {symbol} — Stage Analysis
+    📊 {symbol} — Weinstein Stage Analysis
 
     Stage: {stage_label}
 
@@ -2425,7 +2425,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         part = results[p*chunk:(p+1)*chunk]
 
-        text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
 
         if p == 0:
             text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
@@ -2440,11 +2440,9 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # breakout signal
             if r["breakout"]:
-                #text += " 🚀 Breakout"
-                text += " | Breakout 🚀"
+                text += " 🚀 Breakout"
             else:
-                #text += " | No Breakout"
-                text += ""
+                text += " | No Breakout"
 
             # RS signal
             if r["rs"]:
