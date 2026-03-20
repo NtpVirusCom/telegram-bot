@@ -302,7 +302,6 @@ def detect_stage_pro(df, sata):
 
     return stage
 
-
 def detect_weinstein_stage(df):
 
     close = df["Close"]
@@ -360,7 +359,6 @@ def detect_weinstein_stage(df):
 
     return "3B — Distribution"
 
-
 def detect_base(df):
 
     recent = df.tail(20)
@@ -375,7 +373,6 @@ def detect_base(df):
         return True
 
     return False
-
 
 def detect_breakout(df):
 
@@ -393,10 +390,6 @@ def detect_breakout(df):
     base_high = df["High"].rolling(30).max().iloc[-2]
 
     breakout = df["Close"].iloc[-1] > base_high
-
-
-
-
 
 # ==========================================================
 # ADD: Impulse MACD (LazyBear)
@@ -457,53 +450,8 @@ def calculate_impulse_macd(df: pd.DataFrame):
 
     return md, sb, sh
 
-# ===============================
-# 📊 STAGE ANALYSIS ATTRIBUTES
-# ===============================
-
-def calculate_stage_attributes(symbol: str):
-    data = yf.Ticker(symbol).history(period="2y")
-
-    close = data["Close"]
-
-    ma30 = close.rolling(30).mean()
-    ma150 = close.rolling(150).mean()
-    ma200 = close.rolling(200).mean()
-
-    mansfield = calculate_mansfield_rs(symbol)
-
-    price = close.iloc[-1]
-    high_52w = close.tail(252).max()
-
-    slope200 = ma200.diff(20)
-
-    stage = "Stage 1 / Base"
-
-    if (
-        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-        and slope200.iloc[-1] > 0
-        and mansfield.iloc[-1] > 0
-        and price > 0.75 * high_52w
-    ):
-        stage = "Stage 2 – Uptrend"
-
-    elif price < ma200.iloc[-1]:
-        stage = "Stage 4 – Downtrend"
-
-    return {
-        "data": data.tail(252),
-        "ma30": ma30.tail(252),
-        "ma150": ma150.tail(252),
-        "ma200": ma200.tail(252),
-        "mansfield": mansfield,
-        "stage": stage
-    }
-
-
-
 def ema_slope(series, period: int = 10):
     return series.diff(period).iloc[-1]
-
 
 # ==========================================================
 # Support / Resistance Engine
@@ -516,77 +464,6 @@ def _pivot_points(highs, lows, window: int = 5):
         elif lows[i] == min(lows[i - window:i + window + 1]):
             pivots.append(lows[i])
     return pivots
-
-
-#def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
-#def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
-#    pivots = _pivot_points(highs, lows, window)
-#    zones = []
-#
-#    for p in pivots:
-#        width = p * width_pct
-#        for z in zones:
-#            if abs(p - z["mid"]) <= width:
-#                z["mid"] = (z["mid"] + p) / 2
-#                z["strength"] += 1
-#                break
-#        else:
-#            zones.append({"mid": p, "strength": 1})
-#
-#    return sorted(zones, key=lambda z: z["strength"], reverse=True)
-
-
-#def split_support_resistance(zones, price, max_levels=2, min_strength=2):
-#    supports, resistances = [], []
-#
-#    for z in zones:
-#        if z["strength"] < min_strength:
-#            continue
-#        (supports if z["mid"] < price else resistances).append(z)
-#
-#    supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#    resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#
-#    return supports, resistances
-
-
-#def format_sr_zones(price, support, resistance):
-#    lines = ["📐 Support / Resistance (Zones)"]
-#
-#    if support:
-#        for s in support:
-#            dist = (price - s["mid"]) / price * 100
-#            lines.append(
-#                f"• Support: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}"
-#            )
-#    else:
-#        lines.append("• Support: ไม่มีระดับที่ชัดเจน")
-#
-#    if resistance:
-#        for r in resistance:
-#            dist = (r["mid"] - price) / price * 100
-#            lines.append(
-#                f"• Resistance: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}"
-#            )
-#    else:
-#        lines.append("• Resistance: ไม่มีระดับที่ชัดเจน")
-#
-#    return "\n".join(lines)
-
-
-
-#def format_support_resistance(price, supports, resistances):
-#    lines = ["📐 Support / Resistance (Auto)"]
-#
-#    for i, s in enumerate(supports, 1):
-#        dist = (price - s["mid"]) / price * 100
-#        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
-#
-#    for i, r in enumerate(resistances, 1):
-#        dist = (r["mid"] - price) / price * 100
-#        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
-#
-#    return "\n".join(lines)
 
 def calculate_support_resistance_zones(highs, lows, price, period=4, channel_pct=0.01):
     pivots = _pivot_points(highs, lows, period)
@@ -635,7 +512,6 @@ def calculate_rr(price, support, resistance):
     rr = reward_pct / risk_pct if risk_pct > 0 else None
     return risk_pct, reward_pct, rr
 
-
 # ==========================================================
 # Extended Hours Price
 # ==========================================================
@@ -652,7 +528,6 @@ def get_extended_hours(symbol):
 
     except Exception:
         return None, None
-
 
 # ==========================================================
 # Market Comparison
@@ -685,7 +560,6 @@ def format_market_comparison(symbol, stock, nasdaq, sp500):
         f"{' | '.join(compare)}\n"
         f"{strength}"
     )
-
 
 # ==========================================================
 # Strategic Thesis (Rule-based)
@@ -733,7 +607,6 @@ def pro_investor_thesis(price, ema50, ema100, ema200, rsi, slope200, macd, signa
         thesis.append("  🟡 กลยุทธ์: รอดู Confirmation")
 
     return "\n".join(thesis)
-
 
 # ==========================================================
 # AI Thesis
@@ -1938,7 +1811,6 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ===============================
     # ADVANCED PRO+ LOGIC
     # ===============================
-
     volume_contraction = detect_volume_contraction(df)
 
     base_high = df["High"].rolling(30).max().iloc[-2]
@@ -1970,11 +1842,6 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
     """
 
-    #await update.message.reply_photo(
-    #    photo=chart,
-    #    caption=caption_text
-    #)
-
     await update.message.reply_photo(
         photo=chart,
         caption=caption_text,
@@ -2005,8 +1872,6 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not results:
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
-
-    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2070,7 +1935,6 @@ def count_green_streak(sh_series: pd.Series) -> int:
     return streak
 
 def get_sp500_symbols():
-    import pandas as pd
 
     url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
     df = pd.read_csv(url)
@@ -2236,8 +2100,6 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
         if not results:
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
-
-        import math
 
         chunk_size = 20
         total_items = len(results)
