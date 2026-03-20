@@ -1,4 +1,4 @@
-# ========================================================v.136==
+# ========================================================v.135==
 # Imports & Config
 # ==========================================================
 import io
@@ -1894,7 +1894,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     #await query.answer()
 
-    #from telegram.error import BadRequest
+    from telegram.error import BadRequest
 
     try:
         await query.answer()
