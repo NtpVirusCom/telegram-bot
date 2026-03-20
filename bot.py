@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import math
 import os
 import pandas as pd
-
+import requests
 import yfinance as yf
-
-
+import asyncio
+from io import StringIO
 from openai import OpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-
+from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
 
 
@@ -37,7 +37,7 @@ def post_result_keyboard(symbol: str):
     keyboard = [
         [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+
             InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
         [
@@ -245,7 +245,7 @@ def detect_breakout(df):
 
     #recent = df.tail(20)
     recent = df.tail(21).iloc[:-1]  # ตัดแท่งล่าสุดออก
-
+    
     resistance = recent["High"].max()
     latest = df.iloc[-1]
 
@@ -332,12 +332,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    await query.answer()
+    #await query.answer()
 
-
-
-
-
+    try:
+        await query.answer()
+    except BadRequest:
+        pass
 
     data = query.data
 
@@ -345,23 +345,23 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
         symbols = get_all_symbols()
         context.user_data["mode"] = "im1"        
-        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
-        #print(f"Loaded symbols: {len(symbols)} ตัว")
-        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
-
-
+        # ✅ รันแบบ async background
+        context.application.create_task(
+            run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+        )
+        #await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
     elif data == "menu_stage_scan":
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
         context.user_data["symbols"] = symbols
-        await cmd_stage_scan(query, context)
+        context.user_data["mode"] = "stage2scan"   # ✅ เพิ่มบรรทัดนี้
 
-
-
-
-
+        context.application.create_task(
+            cmd_stage_scan(update, context)
+        )
+        #await cmd_stage_scan(query, context)
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -382,7 +382,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     symbol = update.message.text.strip().upper()
     context.args = [symbol]
- 
+
     if mode == "im1":
         await cmd_im1(update, context)
 
@@ -408,14 +408,14 @@ def detect_strong_stage2(score, breakout):
 # ==========================================================
 
 async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+    if update.message:
+        msg = update.message
+    elif update.callback_query:
+        msg = update.callback_query.message
+    else:
+        return
 
-
-
-
-
-
-
+    await msg.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
 
     symbols = get_all_symbols()
     await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
@@ -424,24 +424,24 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
-
-
-
-
-
-
-
+    # ✅ รองรับ callback + message
+    if update.message:
+        msg = update.message
+    elif update.callback_query:
+        msg = update.callback_query.message
+    else:
+        return
 
     symbols = context.user_data.get("symbols")
 
-    results = scan_stage2_market(symbols)
+    #results = scan_stage2_market(symbols)
+
+    results = await asyncio.to_thread(scan_stage2_market, symbols)
 
     if not results:
-        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        #await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        await msg.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
-
-   
-
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -486,19 +486,19 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if p == pages - 1:
 
-            await update.message.reply_text(
+            #await update.message.reply_text(
+            await msg.reply_text(    
                 text,
                 reply_markup=main_menu_keyboard()
             )
 
-
         else:
-            await update.message.reply_text(text)
-
+            #await update.message.reply_text(text)
+            await msg.reply_text(text)
 
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
-    #for val in reversed(sh_series):
+
     for val in sh_series.iloc[::-1]:
         if val > 0:
             streak += 1
@@ -665,27 +665,27 @@ def scan_stage2_market(symbols):
 
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
 
-    # ✅ แยก message กับ callback ให้ชัด
-    if hasattr(update_or_query, "message"):  
-        # มาจาก callback_query
+    if hasattr(update_or_query, "message") and update_or_query.message:
         msg = update_or_query.message
+    elif hasattr(update_or_query, "callback_query"):
+        msg = update_or_query.callback_query.message
     else:
-        # มาจาก update.message
-        msg = update_or_query.message
-
-    #await msg.reply_text("🔍 กำลังสแกนตลาด. กรุณารอ")
+        return
 
     try:
-        results = scan_impulse_green_streak(
+        #results = scan_impulse_green_streak(
+        #    symbols,
+        #    min_streak=min_streak,
+        #    mode=mode
+        #)
+
+        results = await asyncio.to_thread(
+            scan_impulse_green_streak,
             symbols,
-            min_streak=min_streak,
-            mode=mode
+            min_streak,
+            3,      # lookback_months
+            mode
         )
-
-
-
-
-
 
         if not results:
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
@@ -726,10 +726,10 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
     except Exception as e:
         await msg.reply_text(f"❌ scan error: {str(e)}")
 
+async def error_handler(update, context):
+    print(f"ERROR: {context.error}", flush=True)
 
-
-
-
+    app.add_error_handler(error_handler)
 
 # ==========================================================
 # App Bootstrap
