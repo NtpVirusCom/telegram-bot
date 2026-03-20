@@ -518,17 +518,26 @@ def get_sp500_symbols():
     return symbols
 
 def get_nasdaq100_symbols():
-    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
-    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
-    df = pd.read_csv(url)
+    ##url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    #url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    #df = pd.read_csv(url)
+    #
+    ## ✅ ลบ NaN ออกก่อน
+    #symbols = df["Ticker"].dropna().tolist()
+    #
+    ## ✅ แปลงเป็น string กันพัง
+    #symbols = [str(s).replace(".", "-") for s in symbols]
+    #
+    ##return symbols[:100]
+    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-    # ✅ ลบ NaN ออกก่อน
-    symbols = df["Ticker"].dropna().tolist()
+    r = requests.get(url, headers=headers)
+    tables = pd.read_html(StringIO(r.text))
 
-    # ✅ แปลงเป็น string กันพัง
-    symbols = [str(s).replace(".", "-") for s in symbols]
+    df = tables[4]
 
-    #return symbols[:100]
+    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
     return symbols
 
 def get_all_symbols():
