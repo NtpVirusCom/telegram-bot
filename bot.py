@@ -37,6 +37,7 @@ def post_result_keyboard(symbol: str):
     keyboard = [
         [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+            
             InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
         [
@@ -331,12 +332,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    await query.answer()
+    #await query.answer()
 
-    #try:
-    #    await query.answer()
-    #except BadRequest:
-    #    pass
+    try:
+        await query.answer()
+    except BadRequest:
+        pass
 
     data = query.data
 
@@ -347,8 +348,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ✅ รันแบบ async background
         context.application.create_task(
-            run_scan(query, symbols, min_streak=3, mode="below",
-                     title="🆕 Impulse GREEN Streak 1–2 วัน")
+            run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
         )
         #await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
@@ -396,7 +396,6 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===============================
 # ADVANCED PRO+ DETECTION ENGINE
 # ===============================
-
 def detect_rs_new_high(rs_series, lookback=60):
     recent_high = rs_series.tail(lookback).max()
     return rs_series.iloc[-1] >= recent_high
@@ -409,7 +408,6 @@ def detect_strong_stage2(score, breakout):
 # ==========================================================
 
 async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.message:
         msg = update.message
     elif update.callback_query:
@@ -420,14 +418,7 @@ async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
 
     symbols = get_all_symbols()
-
-    await run_scan(
-        update,
-        symbols,
-        min_streak=3,
-        mode="below",
-        title="🆕 Impulse GREEN Streak 1–2 วัน"
-    )
+    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -445,10 +436,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #results = scan_stage2_market(symbols)
 
-    results = await asyncio.to_thread(
-        scan_stage2_market,
-        symbols
-    )
+    results = await asyncio.to_thread(scan_stage2_market, symbols)
 
     if not results:
         #await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
@@ -510,6 +498,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def count_green_streak(sh_series: pd.Series) -> int:
     streak = 0
+
     for val in sh_series.iloc[::-1]:
         if val > 0:
             streak += 1
@@ -540,6 +529,7 @@ def get_nasdaq100_symbols():
 
     symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
     return symbols
+
 
 def get_all_symbols():
     """
@@ -730,7 +720,6 @@ async def error_handler(update, context):
     print(f"ERROR: {context.error}", flush=True)
 
     app.add_error_handler(error_handler)
-
 
 # ==========================================================
 # App Bootstrap
