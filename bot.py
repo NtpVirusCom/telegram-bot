@@ -1,20 +1,18 @@
-# ========================================================v.135==
+# ========================================================v.134==
 # Imports & Config
 # ==========================================================
-import io
+import os
 import logging
+import pandas as pd
+import yfinance as yf
 import matplotlib.pyplot as plt
 import math
-import os
-import pandas as pd
+import io
 import requests
-import yfinance as yf
 from io import StringIO
-from openai import OpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
-
+from openai import OpenAI
 
 # ==========================================================
 # MODIFY MENU
@@ -35,13 +33,12 @@ def main_menu_keyboard():
         ],
         [
 
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
+        ],
+        [
             InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
-        #],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
         #],
@@ -62,23 +59,22 @@ def post_result_keyboard(symbol: str):
         ],
         [
             #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
-            InlineKeyboardButton("📐 SR Zones ต่อ", callback_data=f"again_sr:{symbol}"),
+            InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
             #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
-            InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
+            InlineKeyboardButton("🆕 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
 
         ],
         [
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            InlineKeyboardButton("🔍 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data=f"again_stage_scan:{symbol}"),
-        #],
+        [
+            InlineKeyboardButton("🔍 Stage 2 ต่อ", callback_data=f"again_stage_scan:{symbol}"),
+        ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
@@ -563,43 +559,43 @@ def calculate_impulse_macd(df: pd.DataFrame):
 # 📊 STAGE ANALYSIS ATTRIBUTES
 # ===============================
 
-#def calculate_stage_attributes(symbol: str):
-#    data = yf.Ticker(symbol).history(period="2y")
-#
-#    close = data["Close"]
-#
-#    ma30 = close.rolling(30).mean()
-#    ma150 = close.rolling(150).mean()
-#    ma200 = close.rolling(200).mean()
-#
-#    mansfield = calculate_mansfield_rs(symbol)
-#
-#    price = close.iloc[-1]
-#    high_52w = close.tail(252).max()
-#
-#    slope200 = ma200.diff(20)
-#
-#    stage = "Stage 1 / Base"
-#
-#    if (
-#        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-#        and slope200.iloc[-1] > 0
-#        and mansfield.iloc[-1] > 0
-#        and price > 0.75 * high_52w
-#    ):
-#        stage = "Stage 2 – Uptrend"
-#
-#    elif price < ma200.iloc[-1]:
-#        stage = "Stage 4 – Downtrend"
-#
-#    return {
-#        "data": data.tail(252),
-#        "ma30": ma30.tail(252),
-#        "ma150": ma150.tail(252),
-#        "ma200": ma200.tail(252),
-#        "mansfield": mansfield,
-#        "stage": stage
-#    }
+def calculate_stage_attributes(symbol: str):
+    data = yf.Ticker(symbol).history(period="2y")
+
+    close = data["Close"]
+
+    ma30 = close.rolling(30).mean()
+    ma150 = close.rolling(150).mean()
+    ma200 = close.rolling(200).mean()
+
+    mansfield = calculate_mansfield_rs(symbol)
+
+    price = close.iloc[-1]
+    high_52w = close.tail(252).max()
+
+    slope200 = ma200.diff(20)
+
+    stage = "Stage 1 / Base"
+
+    if (
+        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
+        and slope200.iloc[-1] > 0
+        and mansfield.iloc[-1] > 0
+        and price > 0.75 * high_52w
+    ):
+        stage = "Stage 2 – Uptrend"
+
+    elif price < ma200.iloc[-1]:
+        stage = "Stage 4 – Downtrend"
+
+    return {
+        "data": data.tail(252),
+        "ma30": ma30.tail(252),
+        "ma150": ma150.tail(252),
+        "ma200": ma200.tail(252),
+        "mansfield": mansfield,
+        "stage": stage
+    }
 
 
 
@@ -1891,15 +1887,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    
-    #await query.answer()
-
-    from telegram.error import BadRequest
-
-    try:
-        await query.answer()
-    except BadRequest:
-        pass
+    await query.answer()
 
     data = query.data
 
@@ -2381,11 +2369,10 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
     RS New High: {"Yes 💪" if rs_new_high else "No"}
 
-    Stage Transition: {stage_transition if stage_transition else "None"} 
-    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}   
-    """
+    Stage Transition: {stage_transition if stage_transition else "None"}
 
-    
+    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
+    """
 
     #await update.message.reply_photo(
     #    photo=chart,
