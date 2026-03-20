@@ -1,20 +1,16 @@
-# ========================================================v.136==
+# ========================================================v.121==
 # Imports & Config
 # ==========================================================
-import io
+import os
 import logging
+import pandas as pd
+import yfinance as yf
 import matplotlib.pyplot as plt
 import math
-import os
-import pandas as pd
-import requests
-import yfinance as yf
-from io import StringIO
-from openai import OpenAI
+import io
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, filters, MessageHandler
-
+from openai import OpenAI
 
 # ==========================================================
 # MODIFY MENU
@@ -30,18 +26,18 @@ def main_menu_keyboard():
             InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
         ],
         [
-            InlineKeyboardButton("🆕 Mansfield RS", callback_data="menu_man"),
-            InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
+            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         [
-
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
+            InlineKeyboardButton("📊 Mansfield RS", callback_data="menu_man"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
-        #],
+        [
+            InlineKeyboardButton("📊 Stage Analysis", callback_data="menu_stage"),
+        ],
+        [
+            InlineKeyboardButton("🚀 Stage 2 Scan", callback_data="menu_stage_scan"),
+        ],
         #[
         #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
         #],
@@ -62,23 +58,20 @@ def post_result_keyboard(symbol: str):
         ],
         [
             #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
-            InlineKeyboardButton("📐 SR Zones ต่อ", callback_data=f"again_sr:{symbol}"),
+            InlineKeyboardButton("📐 SR ต่อ", callback_data=f"again_sr:{symbol}"),
             #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
-            InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
-            InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
-
+            InlineKeyboardButton("🆕 IMACD 1–2 วัน", callback_data="menu_im1"),
+            InlineKeyboardButton("🚀 IMACD ≥ 3 วัน", callback_data="menu_im2"),
         ],
         [
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            InlineKeyboardButton("📊 Man RS ต่อ", callback_data=f"again_man:{symbol}"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data=f"again_stage_scan:{symbol}"),
-        #],
+        [
+            InlineKeyboardButton("📊 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
+        ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
@@ -390,64 +383,6 @@ def detect_stage_pro(df, sata):
     return stage
 
 
-def detect_weinstein_stage(df):
-
-    close = df["Close"]
-
-    ma10 = close.rolling(10).mean()
-    ma30 = close.rolling(30).mean()
-    ma40 = close.rolling(40).mean()
-
-    price = close.iloc[-1]
-
-    ma40_now = ma40.iloc[-1]
-    ma40_prev = ma40.iloc[-5]
-
-    slope40 = ma40_now - ma40_prev
-
-    # ----------------------
-    # Stage 2
-    # ----------------------
-    if price > ma40_now and slope40 > 0:
-
-        base_high = df["High"].rolling(30).max().iloc[-2]
-
-        if price > base_high:
-            return "2A — Breakout 🚀"
-        else:
-            return "2B — Advancing Trend"
-
-    # ----------------------
-    # Stage 4
-    # ----------------------
-    if price < ma40_now and slope40 < 0:
-
-        base_low = df["Low"].rolling(30).min().iloc[-2]
-
-        if price < base_low:
-            return "4A — Breakdown 🔻"
-        else:
-            return "4B — Declining"
-
-    # ----------------------
-    # Stage 1
-    # ----------------------
-    if abs(slope40) < ma40_now * 0.002:
-
-        if price < ma40_now:
-            return "1A — Bottoming"
-        else:
-            return "1B — Base Building"
-
-    # ----------------------
-    # Stage 3
-    # ----------------------
-    if price > ma40_now:
-        return "3A — Topping"
-
-    return "3B — Distribution"
-
-
 def detect_base(df):
 
     recent = df.tail(20)
@@ -563,43 +498,43 @@ def calculate_impulse_macd(df: pd.DataFrame):
 # 📊 STAGE ANALYSIS ATTRIBUTES
 # ===============================
 
-#def calculate_stage_attributes(symbol: str):
-#    data = yf.Ticker(symbol).history(period="2y")
-#
-#    close = data["Close"]
-#
-#    ma30 = close.rolling(30).mean()
-#    ma150 = close.rolling(150).mean()
-#    ma200 = close.rolling(200).mean()
-#
-#    mansfield = calculate_mansfield_rs(symbol)
-#
-#    price = close.iloc[-1]
-#    high_52w = close.tail(252).max()
-#
-#    slope200 = ma200.diff(20)
-#
-#    stage = "Stage 1 / Base"
-#
-#    if (
-#        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-#        and slope200.iloc[-1] > 0
-#        and mansfield.iloc[-1] > 0
-#        and price > 0.75 * high_52w
-#    ):
-#        stage = "Stage 2 – Uptrend"
-#
-#    elif price < ma200.iloc[-1]:
-#        stage = "Stage 4 – Downtrend"
-#
-#    return {
-#        "data": data.tail(252),
-#        "ma30": ma30.tail(252),
-#        "ma150": ma150.tail(252),
-#        "ma200": ma200.tail(252),
-#        "mansfield": mansfield,
-#        "stage": stage
-#    }
+def calculate_stage_attributes(symbol: str):
+    data = yf.Ticker(symbol).history(period="2y")
+
+    close = data["Close"]
+
+    ma30 = close.rolling(30).mean()
+    ma150 = close.rolling(150).mean()
+    ma200 = close.rolling(200).mean()
+
+    mansfield = calculate_mansfield_rs(symbol)
+
+    price = close.iloc[-1]
+    high_52w = close.tail(252).max()
+
+    slope200 = ma200.diff(20)
+
+    stage = "Stage 1 / Base"
+
+    if (
+        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
+        and slope200.iloc[-1] > 0
+        and mansfield.iloc[-1] > 0
+        and price > 0.75 * high_52w
+    ):
+        stage = "Stage 2 – Uptrend"
+
+    elif price < ma200.iloc[-1]:
+        stage = "Stage 4 – Downtrend"
+
+    return {
+        "data": data.tail(252),
+        "ma30": ma30.tail(252),
+        "ma150": ma150.tail(252),
+        "ma200": ma200.tail(252),
+        "mansfield": mansfield,
+        "stage": stage
+    }
 
 
 
@@ -736,24 +671,6 @@ def calculate_rr(price, support, resistance):
 
     rr = reward_pct / risk_pct if risk_pct > 0 else None
     return risk_pct, reward_pct, rr
-
-
-# ==========================================================
-# Extended Hours Price
-# ==========================================================
-def get_extended_hours(symbol):
-
-    try:
-        t = yf.Ticker(symbol)
-        info = t.info
-
-        pre = info.get("preMarketPrice")
-        post = info.get("postMarketPrice")
-
-        return pre, post
-
-    except Exception:
-        return None, None
 
 
 # ==========================================================
@@ -957,21 +874,6 @@ def analyze(symbol: str) -> dict:
     price = close.iloc[-1]
     change_pct = (price - close.iloc[-2]) / close.iloc[-2] * 100
 
-    # NEW
-    pre_market, post_market = get_extended_hours(symbol)
-
-    # =========================
-    # Extended Hours Gap %
-    # =========================
-    pre_gap_pct = None
-    post_gap_pct = None
-
-    if pre_market:
-        pre_gap_pct = (pre_market - price) / price * 100
-
-    if post_market:
-        post_gap_pct = (post_market - price) / price * 100
-
     ema50 = close.ewm(span=50, adjust=False).mean().iloc[-1]
     ema100 = close.ewm(span=100, adjust=False).mean().iloc[-1]
 
@@ -992,10 +894,6 @@ def analyze(symbol: str) -> dict:
     return {
         "price": price,
         "change_pct": change_pct,
-        "pre_market": pre_market,
-        "post_market": post_market,
-        "pre_gap_pct": pre_gap_pct,
-        "post_gap_pct": post_gap_pct,
         "ema50": ema50,
         "ema100": ema100,
         "ema200": ema200,
@@ -1891,15 +1789,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    
-    #await query.answer()
-
-    #from telegram.error import BadRequest
-
-    try:
-        await query.answer()
-    except BadRequest:
-        pass
+    await query.answer()
 
     data = query.data
 
@@ -1932,7 +1822,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
     elif data == "menu_im2":
-        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
+        await query.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
         symbols = get_all_symbols()
         context.user_data["mode"] = "im2"
         #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
@@ -1951,10 +1841,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     elif data == "menu_stage_scan":
-        await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
-        context.user_data["symbols"] = symbols
-        await cmd_stage_scan(query, context)
+        await run_stage_scan(query, symbols)
 
 
 
@@ -1999,11 +1887,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_stage(query, context)
 
-    elif data.startswith("again_stage_scan:"):
-        symbol = data.split(":")[1]
-        context.args = [symbol]
-        await cmd_stage_scan(query, context)
-
 
 
 # ==========================================================
@@ -2036,11 +1919,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif mode == "stage":
         await cmd_stage(update, context)
 
-    elif mode == "stage2scan":
-        await cmd_stage_scan(update, context)
-
-    
-
 
 
 
@@ -2065,19 +1943,6 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-
-    pre_text = "-"
-    post_text = "-"
-
-    if d["pre_market"]:
-        gap = f" ({d['pre_gap_pct']:+.2f}%)" if d["pre_gap_pct"] else ""
-        pre_text = f"${d['pre_market']:.2f}{gap}"
-
-    if d["post_market"]:
-        gap = f" ({d['post_gap_pct']:+.2f}%)" if d["post_gap_pct"] else ""
-        post_text = f"${d['post_market']:.2f}{gap}"
-
-
     thesis = pro_investor_thesis(
         d['price'],
         d['ema50'],
@@ -2090,15 +1955,9 @@ async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         d['hist'].iloc[-1],
     )
 
-    #text = (
-    #    f"📊 {symbol}\n"
-    #    f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
-
     text = (
         f"📊 {symbol}\n"
-        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n"
-        f"🌅 ราคาก่อนตลาดเปิด: {pre_text}\n"
-        f"🌙 ราคาหลังตลาดปิด: {post_text}\n\n"
+        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
         f"• EMA50: {d['ema50']:.2f}\n"
         f"• EMA100: {d['ema100']:.2f}\n"
         f"• EMA200: {d['ema200']:.2f}\n"
@@ -2336,8 +2195,7 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         df, sata, rs = calculate_sata(symbol)
 
         latest_score = int(sata["score"].iloc[-1])
-        #stage_label = detect_stage_pro(df, sata)
-        stage_label = detect_weinstein_stage(df)
+        stage_label = detect_stage_pro(df, sata)
         is_base = detect_base(df)
         is_breakout = detect_breakout(df)
 
@@ -2369,9 +2227,8 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     caption_text = f"""
-    📊 {symbol} — Stage Analysis
 
-    Stage: {stage_label}
+    📊 {symbol} — Stage Analysis
 
     SATA Score: {latest_score}/10
     Base Forming: {"Yes" if is_base else "No"}
@@ -2381,11 +2238,10 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
     RS New High: {"Yes 💪" if rs_new_high else "No"}
 
-    Stage Transition: {stage_transition if stage_transition else "None"} 
-    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}   
-    """
+    Stage Transition: {stage_transition if stage_transition else "None"}
 
-    
+    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
+    """
 
     #await update.message.reply_photo(
     #    photo=chart,
@@ -2419,9 +2275,9 @@ async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+    await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
 
-    symbols = context.user_data.get("symbols")
+    symbols = get_all_symbols()
 
     results = scan_stage2_market(symbols)
 
@@ -2429,7 +2285,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    #import math
+    import math
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2438,7 +2294,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         part = results[p*chunk:(p+1)*chunk]
 
-        text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
 
         if p == 0:
             text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
@@ -2451,28 +2307,13 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"| ${r['price']:.2f}"
             )
 
-            # breakout signal
             if r["breakout"]:
-                #text += " 🚀 Breakout"
-                text += " | Breakout 🚀"
-            else:
-                #text += " | No Breakout"
-                text += ""
+                text += " 🚀"
 
-            # RS signal
             if r["rs"]:
-                text += " | RS↑"
+                text += " RS↑"
 
             text += "\n"
-
-            attrs = [
-                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
-                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
-            ]
-
-            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
-
-            text += f"   SATA: {attr_text}\n"
 
         if p == pages - 1:
 
@@ -2508,7 +2349,7 @@ def count_green_streak(sh_series: pd.Series) -> int:
 
 
 def get_sp500_symbols():
-    #import pandas as pd
+    import pandas as pd
 
     url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
     df = pd.read_csv(url)
@@ -2519,43 +2360,20 @@ def get_sp500_symbols():
     return symbols
 
 
-#NASDAQ100_SYMBOLS = None
-#
-#def get_nasdaq100_symbols():
-#    global NASDAQ100_SYMBOLS
-#
-#    if NASDAQ100_SYMBOLS:
-#        return NASDAQ100_SYMBOLS
-#
-#    #import pandas as pd
-#    #import requests
-#    #from io import StringIO
-#
-#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-#    headers = {"User-Agent": "Mozilla/5.0"}
-#
-#    r = requests.get(url, headers=headers)
-#    tables = pd.read_html(StringIO(r.text))
-#
-#    df = tables[4]
-#
-#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-#    return NASDAQ100_SYMBOLS
-
-
 def get_nasdaq100_symbols():
+    import pandas as pd
 
-    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    df = pd.read_csv(url)
 
-    r = requests.get(url, headers=headers)
-    tables = pd.read_html(StringIO(r.text))
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Symbol"].dropna().tolist()
 
-    df = tables[4]
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
 
-    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-    return symbols
-    
+    return symbols[:100]
+
 
 def get_all_symbols():
     """
@@ -2645,32 +2463,16 @@ def scan_stage2_market(symbols):
             # ===== เงื่อนไข Stage 2 Screener =====
             #if stage == "Stage 2" and strong_stage2:
             #if stage == "Stage 2":
-            #if stage == strong_stage2:
-            #if stage == breakout:
             if stage == "Stage 2" and latest_score >= 6:
 
                 price = df["Close"].iloc[-1]
 
-                latest_attr = sata.iloc[-1]
-
                 results.append({
                     "symbol": symbol,
-                    "score": int(latest_score),
+                    "score": latest_score,
                     "price": price,
                     "breakout": breakout,
-                    "rs": rs_new_high,
-
-                    # SATA Attributes
-                    "a1": int(latest_attr["a1"]),
-                    "a2": int(latest_attr["a2"]),
-                    "a3": int(latest_attr["a3"]),
-                    "a4": int(latest_attr["a4"]),
-                    "a5": int(latest_attr["a5"]),
-                    "a6": int(latest_attr["a6"]),
-                    "a7": int(latest_attr["a7"]),
-                    "a8": int(latest_attr["a8"]),
-                    "a9": int(latest_attr["a9"]),
-                    "a10": int(latest_attr["a10"]),
+                    "rs": rs_new_high
                 })
 
         except:
@@ -2683,45 +2485,45 @@ def scan_stage2_market(symbols):
     return results
 
 
-#async def run_stage_scan(query, symbols):
-#
-#    results = scan_stage2_market(symbols)
-#
-#    if not results:
-#        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
-#        return
-#
-#    import math
-#
-#    chunk = 20
-#    pages = math.ceil(len(results) / chunk)
-#
-#    for p in range(pages):
-#
-#        part = results[p*chunk:(p+1)*chunk]
-#
-#        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
-#
-#        if p == 0:
-#            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
-#
-#        for r in part:
-#
-#            text += (
-#                f"🟢 {r['symbol']} "
-#                f"| Score {r['score']}/10 "
-#                f"| ${r['price']:.2f}"
-#            )
-#
-#            if r["breakout"]:
-#                text += " 🚀"
-#
-#            if r["rs"]:
-#                text += " RS↑"
-#
-#            text += "\n"
-#
-#        await query.message.reply_text(text)
+async def run_stage_scan(query, symbols):
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+    import math
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            if r["breakout"]:
+                text += " 🚀"
+
+            if r["rs"]:
+                text += " RS↑"
+
+            text += "\n"
+
+        await query.message.reply_text(text)
 
 
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
@@ -2761,7 +2563,7 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
 
-        #import math
+        import math
 
         chunk_size = 20
         total_items = len(results)
