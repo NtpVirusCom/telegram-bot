@@ -1,4 +1,4 @@
-# ========================================================v.136==
+# ==========================================================
 # Imports & Config
 # ==========================================================
 import io
@@ -10,6 +10,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from io import StringIO
+
 from openai import OpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -34,17 +35,9 @@ def main_menu_keyboard():
             InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
         ],
         [
-
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
+            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data="menu_stage_scan"),
-        #],
-        #[
-        #    InlineKeyboardButton("⚡ Impulse MACD", callback_data="menu_impulse"),
-        #],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
         ],
@@ -55,36 +48,27 @@ def main_menu_keyboard():
 def post_result_keyboard(symbol: str):
     keyboard = [
         [
-            #InlineKeyboardButton("📊 Technical ต่อ", callback_data="menu_ta"),
             InlineKeyboardButton("📊 Technical ต่อ", callback_data=f"again_ta:{symbol}"),
-            #InlineKeyboardButton("🤖 AI ต่อ", callback_data="menu_ai"),     
             InlineKeyboardButton("🤖 AI ต่อ", callback_data=f"again_ai:{symbol}"),        
         ],
         [
-            #InlineKeyboardButton("📐 SR Zones", callback_data="menu_sr"),
             InlineKeyboardButton("📐 SR Zones ต่อ", callback_data=f"again_sr:{symbol}"),
-            #InlineKeyboardButton("📈 Chart", callback_data="menu_ch"),
             InlineKeyboardButton("📈 Chart ต่อ", callback_data=f"again_ch:{symbol}"),
         ],
         [
             InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
-
         ],
         [
             InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 IMACD ≥ 3 วัน", callback_data="menu_im2"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
         ],
-        #[
-        #    InlineKeyboardButton("🔍 Stage 2 Scan", callback_data=f"again_stage_scan:{symbol}"),
-        #],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
-
 
 def get_sr_zones_1y(data, price):
     data_1y = data.tail(252)  # ~1Y
@@ -97,8 +81,6 @@ def get_sr_zones_1y(data, price):
         channel_pct=0.01
     )
     return support, resistance
-
-
 
 # ==========================================================
 # Text Assets
@@ -196,8 +178,6 @@ HELP_TEXT = """
 ⚠️ ข้อมูลเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
 """
 
-
-
 # ==========================================================
 # Environment
 # ==========================================================
@@ -206,7 +186,6 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 #client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 # ==========================================================
 # Technical Indicators
@@ -233,19 +212,10 @@ def calculate_macd(close):
 
     return macd, signal, hist
 
-
 # ==========================================================
 # Mansfield RS (StageAnalysis - Weekly, Unflattened)
 # ==========================================================
 def calculate_mansfield_rs(symbol: str, benchmark: str = "^GSPC", ma_length: int = 52):
-    """
-    Pine reference:
-    stockDividedBySpx = stock / spx * 100
-    zeroLine = ta.sma(stockDividedBySpx, maLength)
-
-    Weekly resolution
-    """
-
     # ดึงข้อมูลแบบ Weekly
     stock = yf.Ticker(symbol).history(period="3y", interval="1wk")
     index = yf.Ticker(benchmark).history(period="3y", interval="1wk")
@@ -265,7 +235,6 @@ def calculate_mansfield_rs(symbol: str, benchmark: str = "^GSPC", ma_length: int
     df["rs_ma"] = df["rs"].rolling(ma_length).mean()
 
     return df.tail(104)  # ~2 ปีล่าสุด
-
 
 # ==========================================================
 # SATA CALCULATION (Stage Analysis Technical Attributes)
@@ -350,7 +319,6 @@ def calculate_sata(symbol: str):
     #return df, sata
     return df, sata, rs
 
-
 def detect_stage_pro(df, sata):
 
     df = df.copy()
@@ -388,7 +356,6 @@ def detect_stage_pro(df, sata):
         stage = "Stage 3"
 
     return stage
-
 
 def detect_weinstein_stage(df):
 
@@ -447,7 +414,6 @@ def detect_weinstein_stage(df):
 
     return "3B — Distribution"
 
-
 def detect_base(df):
 
     recent = df.tail(20)
@@ -463,10 +429,10 @@ def detect_base(df):
 
     return False
 
-
 def detect_breakout(df):
 
-    recent = df.tail(20)
+    #recent = df.tail(20)
+    recent = df.tail(21).iloc[:-1]  # ตัดแท่งล่าสุดออก
 
     resistance = recent["High"].max()
     latest = df.iloc[-1]
@@ -476,9 +442,9 @@ def detect_breakout(df):
 
     return False
 
+    base_high = df["High"].rolling(30).max().iloc[-2]
 
-
-
+    breakout = df["Close"].iloc[-1] > base_high
 
 # ==========================================================
 # ADD: Impulse MACD (LazyBear)
@@ -539,73 +505,8 @@ def calculate_impulse_macd(df: pd.DataFrame):
 
     return md, sb, sh
 
-# ===============================
-# 📊 MANSFIELD RELATIVE STRENGTH
-# ===============================
-
-#def calculate_mansfield_rs(symbol: str, benchmark="^GSPC"):
-#    stock = yf.Ticker(symbol).history(period="2y")
-#    index = yf.Ticker(benchmark).history(period="2y")
-#
-#    df = pd.DataFrame({
-#        "stock": stock["Close"],
-#        "index": index["Close"]
-#    }).dropna()
-#
-#    rs = df["stock"] / df["index"]
-#    rs_ma = rs.rolling(252).mean()  # 52 สัปดาห์
-#
-#    mansfield = ((rs / rs_ma) - 1) * 100
-#    return mansfield.tail(252)
-
-
-# ===============================
-# 📊 STAGE ANALYSIS ATTRIBUTES
-# ===============================
-
-#def calculate_stage_attributes(symbol: str):
-#    data = yf.Ticker(symbol).history(period="2y")
-#
-#    close = data["Close"]
-#
-#    ma30 = close.rolling(30).mean()
-#    ma150 = close.rolling(150).mean()
-#    ma200 = close.rolling(200).mean()
-#
-#    mansfield = calculate_mansfield_rs(symbol)
-#
-#    price = close.iloc[-1]
-#    high_52w = close.tail(252).max()
-#
-#    slope200 = ma200.diff(20)
-#
-#    stage = "Stage 1 / Base"
-#
-#    if (
-#        price > ma30.iloc[-1] > ma150.iloc[-1] > ma200.iloc[-1]
-#        and slope200.iloc[-1] > 0
-#        and mansfield.iloc[-1] > 0
-#        and price > 0.75 * high_52w
-#    ):
-#        stage = "Stage 2 – Uptrend"
-#
-#    elif price < ma200.iloc[-1]:
-#        stage = "Stage 4 – Downtrend"
-#
-#    return {
-#        "data": data.tail(252),
-#        "ma30": ma30.tail(252),
-#        "ma150": ma150.tail(252),
-#        "ma200": ma200.tail(252),
-#        "mansfield": mansfield,
-#        "stage": stage
-#    }
-
-
-
 def ema_slope(series, period: int = 10):
     return series.diff(period).iloc[-1]
-
 
 # ==========================================================
 # Support / Resistance Engine
@@ -618,77 +519,6 @@ def _pivot_points(highs, lows, window: int = 5):
         elif lows[i] == min(lows[i - window:i + window + 1]):
             pivots.append(lows[i])
     return pivots
-
-
-#def calculate_support_resistance(highs, lows, window=5, width_pct=0.01):
-#def calculate_support_resistance(highs, lows, window=4, width_pct=0.01):
-#    pivots = _pivot_points(highs, lows, window)
-#    zones = []
-#
-#    for p in pivots:
-#        width = p * width_pct
-#        for z in zones:
-#            if abs(p - z["mid"]) <= width:
-#                z["mid"] = (z["mid"] + p) / 2
-#                z["strength"] += 1
-#                break
-#        else:
-#            zones.append({"mid": p, "strength": 1})
-#
-#    return sorted(zones, key=lambda z: z["strength"], reverse=True)
-
-
-#def split_support_resistance(zones, price, max_levels=2, min_strength=2):
-#    supports, resistances = [], []
-#
-#    for z in zones:
-#        if z["strength"] < min_strength:
-#            continue
-#        (supports if z["mid"] < price else resistances).append(z)
-#
-#    supports = sorted(supports, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#    resistances = sorted(resistances, key=lambda z: abs(price - z["mid"]))[:max_levels]
-#
-#    return supports, resistances
-
-
-#def format_sr_zones(price, support, resistance):
-#    lines = ["📐 Support / Resistance (Zones)"]
-#
-#    if support:
-#        for s in support:
-#            dist = (price - s["mid"]) / price * 100
-#            lines.append(
-#                f"• Support: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}"
-#            )
-#    else:
-#        lines.append("• Support: ไม่มีระดับที่ชัดเจน")
-#
-#    if resistance:
-#        for r in resistance:
-#            dist = (r["mid"] - price) / price * 100
-#            lines.append(
-#                f"• Resistance: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}"
-#            )
-#    else:
-#        lines.append("• Resistance: ไม่มีระดับที่ชัดเจน")
-#
-#    return "\n".join(lines)
-
-
-
-#def format_support_resistance(price, supports, resistances):
-#    lines = ["📐 Support / Resistance (Auto)"]
-#
-#    for i, s in enumerate(supports, 1):
-#        dist = (price - s["mid"]) / price * 100
-#        lines.append(f"• Support {i}: {s['mid']:.2f} (↓ {dist:.2f}%) | S={s['strength']}")
-#
-#    for i, r in enumerate(resistances, 1):
-#        dist = (r["mid"] - price) / price * 100
-#        lines.append(f"• Resistance {i}: {r['mid']:.2f} (↑ {dist:.2f}%) | S={r['strength']}")
-#
-#    return "\n".join(lines)
 
 def calculate_support_resistance_zones(highs, lows, price, period=4, channel_pct=0.01):
     pivots = _pivot_points(highs, lows, period)
@@ -737,7 +567,6 @@ def calculate_rr(price, support, resistance):
     rr = reward_pct / risk_pct if risk_pct > 0 else None
     return risk_pct, reward_pct, rr
 
-
 # ==========================================================
 # Extended Hours Price
 # ==========================================================
@@ -754,7 +583,6 @@ def get_extended_hours(symbol):
 
     except Exception:
         return None, None
-
 
 # ==========================================================
 # Market Comparison
@@ -787,7 +615,6 @@ def format_market_comparison(symbol, stock, nasdaq, sp500):
         f"{' | '.join(compare)}\n"
         f"{strength}"
     )
-
 
 # ==========================================================
 # Strategic Thesis (Rule-based)
@@ -835,7 +662,6 @@ def pro_investor_thesis(price, ema50, ema100, ema200, rsi, slope200, macd, signa
         thesis.append("  🟡 กลยุทธ์: รอดู Confirmation")
 
     return "\n".join(thesis)
-
 
 # ==========================================================
 # AI Thesis
@@ -932,7 +758,6 @@ Rules:
 
     return res.choices[0].message.content
 
-
 # ==========================================================
 # Core Analysis Pipeline
 # ==========================================================
@@ -987,7 +812,6 @@ def analyze(symbol: str) -> dict:
     #zones = calculate_support_resistance(highs_1y, lows_1y)
     #supports, resistances = split_support_resistance(zones, price)
     supports, resistances = get_sr_zones_1y(data, price)
-
 
     return {
         "price": price,
@@ -1049,7 +873,6 @@ def calculate_heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 
     return ha
 
-
 def plot_technical_chart(symbol: str):
     apply_tv_style()
     # โหลดข้อมูล 1 ปี
@@ -1066,10 +889,6 @@ def plot_technical_chart(symbol: str):
     lows = data_3y["Low"].values
 
     # EMA
-    #ema50 = close.ewm(span=50).mean()
-    #ema100 = close.ewm(span=100).mean()
-    #ema200 = close.ewm(span=200).mean()
-
     ema50 = close.ewm(span=50, adjust=False).mean()
     ema100 = close.ewm(span=100, adjust=False).mean()
     ema200 = close.ewm(span=200, adjust=False).mean()
@@ -1081,11 +900,6 @@ def plot_technical_chart(symbol: str):
 
     # Support / Resistance (ใช้ข้อมูล 1 ปี)
     price = close.iloc[-1]
-    #zones = calculate_support_resistance(highs, lows)
-    #supports, resistances = split_support_resistance(zones, price)
-    #supports, resistances = calculate_support_resistance_zones(
-    #    highs, lows, price
-    #)
 
     # ใช้ข้อมูล 1 ปี เหมือน cmd_sr
     data_sr = data_3y.tail(252)
@@ -1100,14 +914,11 @@ def plot_technical_chart(symbol: str):
     supports = supports[:2]
     resistances = resistances[:2]
 
-
-
     # ===== Last indicator values =====
     macd_last = macd.iloc[-1]
     signal_last = signal.iloc[-1]
     hist_last = hist.iloc[-1]
     rsi_last = rsi.iloc[-1]
-
 
     # แสดงเฉพาะ 1 เดือนล่าสุด
     data_1m = data_3y.tail(21)
@@ -1123,7 +934,6 @@ def plot_technical_chart(symbol: str):
 
     # ===== Heikin Ashi =====
     ha = calculate_heikin_ashi(data_1m)
-
 
     close = close.loc[data_1m.index]
     ema50 = ema50.loc[data_1m.index]
@@ -1204,7 +1014,6 @@ def plot_technical_chart(symbol: str):
             else:
                 label_y -= threshold
 
-
     # 👉 ใช้สีจากแท่ง Heikin Ashi ล่าสุด
     ha_open_last = ha["HA_Open"].iloc[-1]
     ha_close_last = ha["HA_Close"].iloc[-1]
@@ -1254,8 +1063,6 @@ def plot_technical_chart(symbol: str):
         )
     )
 
-
-
     ax1.plot(ema50, label=f"EMA50 {ema50_last:.2f}",
              color="#2962FF", linewidth=1.2)
 
@@ -1264,26 +1071,6 @@ def plot_technical_chart(symbol: str):
 
     ax1.plot(ema200, label=f"EMA200 {ema200_last:.2f}",
              color="#D50000", linewidth=1.6)
-
-
-
-    # Support
-    #for s in supports:
-    #    ax1.axhline(
-    #        y=s["mid"],
-    #        linestyle="--",
-    #        alpha=0.7,
-    #        label=f"Support {s['mid']:.2f}"
-    #    )
-
-    # Resistance
-    #for r in resistances:
-    #    ax1.axhline(
-    #        y=r["mid"],
-    #        linestyle=":",
-    #        alpha=0.7,
-    #        label=f"Resistance {r['mid']:.2f}"
-    #    )
 
     # ===== Support =====
     for i, s in enumerate(supports, 1):
@@ -1317,7 +1104,6 @@ def plot_technical_chart(symbol: str):
 
         )
 
-
     # ===== Resistance =====
     for i, r in enumerate(resistances, 1):
         y = r["mid"]
@@ -1349,19 +1135,7 @@ def plot_technical_chart(symbol: str):
             )
         )
 
-
     # ===== Legend Title =====
-    #ax1.legend(
-    #    loc="upper left",
-    #    title=f"SR (S={len(supports)} | R={len(resistances)})"
-    #)
-
-    #legend1 = ax1.legend(
-    #loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
-    #framealpha=0.15,
-    #fontsize=9
-    #)
-
     legend1 = ax1.legend(
         loc="upper left",
         fontsize=9,
@@ -1374,23 +1148,6 @@ def plot_technical_chart(symbol: str):
     legend1.get_frame().set_linewidth(0.8)
     legend1.get_frame().set_boxstyle("round,pad=0.4")
 
-
-
-    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
-
-
-
-
-
-    #ax1.set_title(f"{symbol} — Price + EMA + MACD + Support / Resistance + RSI")
-    #ax1.legend(loc="best")
-    #ax1.grid(True)
-    #ax1.set_title(
-    #    f"{symbol} — Price & Trend Structure",
-    #    loc="left",
-    #    fontsize=12,
-    #    color="white"
-    #)
     ax1.set_title(
         f"{symbol} — Heikin Ashi Trend Structure",
         loc="left",
@@ -1398,20 +1155,10 @@ def plot_technical_chart(symbol: str):
         color="white"
 )
 
-
-    #ax1.legend(loc="upper left")
     ax1.grid(True)
 
 
     # MACD
-    #ax2.plot(macd, label=f"MACD: {macd_last:.3f}")
-    #ax2.plot(signal, label=f"Signal: {signal_last:.3f}")
-    #ax2.bar(hist.index, hist, label=f"Hist: {hist_last:+.3f}")
-    #ax2.plot(macd, label="MACD")
-    #ax2.plot(signal, label="Signal")
-    #ax2.bar(hist.index, hist, label="Hist")
-    #ax2.legend()
-    #ax2.grid(True)
     hist_colors = ["#00E676" if h >= 0 else "#FF5252" for h in hist]
 
     ax2.bar(
@@ -1443,19 +1190,11 @@ def plot_technical_chart(symbol: str):
     legend2.get_frame().set_linewidth(0.8)
     legend2.get_frame().set_boxstyle("round,pad=0.4")
 
-
-    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
-
-
-
-    #ax2.legend(loc="upper left")
     ax2.grid(True)
-
 
     # =====================================
     # Impulse MACD (แทรกระหว่าง MACD กับ RSI)
     # =====================================
-
     impulse_colors = []
     for i in range(len(sh)):
         if sh.iloc[i] > 0:
@@ -1492,16 +1231,7 @@ def plot_technical_chart(symbol: str):
     ax3.set_title("Impulse MACD (ZLEMA)", loc="left", fontsize=10)
     ax3.grid(True)
 
-
     # RSI
-    #ax3.plot(rsi, label="RSI")
-    #ax3.plot(rsi, label=f"RSI: {rsi_last:.2f}")
-    #ax3.axhline(70, linestyle="--")
-    #ax3.axhline(30, linestyle="--")
-    #ax3.set_ylim(0, 100)
-    #ax3.legend()
-    #ax3.grid(True)
-
     ax4.plot(rsi, label=f"RSI {rsi_last:.2f}",
          color="#AB47BC", linewidth=1.4)
 
@@ -1509,12 +1239,6 @@ def plot_technical_chart(symbol: str):
     ax4.axhline(30, color="#00E676", linestyle="--", alpha=0.5)
 
     ax4.set_ylim(0, 100)
-
-    #legend1 = ax3.legend(
-    #    loc="best",   # ← ให้ matplotlib เลือกตำแหน่งอัตโนมัติ
-    #    framealpha=0.15,
-    #    fontsize=9
-    #)
 
     legend4 = ax4.legend(
         loc="upper left",
@@ -1527,15 +1251,8 @@ def plot_technical_chart(symbol: str):
     legend4.get_frame().set_alpha(0.9)
     legend4.get_frame().set_linewidth(0.8)
     legend4.get_frame().set_boxstyle("round,pad=0.4")
-
-
-    #legend1.set_title(f"SR (S={len(supports)} | R={len(resistances)})")
-
-
-
-    #ax3.legend(loc="upper left")
+ 
     ax4.grid(True)
-
 
     buf = io.BytesIO()
     plt.tight_layout()
@@ -1544,9 +1261,6 @@ def plot_technical_chart(symbol: str):
     buf.seek(0)
 
     return buf
-
-    
-
 
 def plot_impulse_chart(symbol: str):
     apply_tv_style()
@@ -1615,81 +1329,6 @@ def plot_impulse_chart(symbol: str):
 
     return buf
     
-
-
-
-
-# ===============================
-# 📊 STAGE ANALYSIS PLOT
-# ===============================
-
-#def plot_stage_analysis(symbol: str):
-#    apply_tv_style()
-
-#    d = calculate_stage_attributes(symbol)
-#
-#    data = d["data"]
-#    ma30 = d["ma30"]
-#    ma150 = d["ma150"]
-#    ma200 = d["ma200"]
-#    mansfield = d["mansfield"]
-#
-#    # ===== จำกัดช่วงเวลาแสดงผลย้อนหลัง 1 ปี =====
-#    end_date = data.index.max()
-#    start_date = end_date - pd.DateOffset(years=1)
-#
-#    data = data[data.index >= start_date]
-#    ma30 = ma30[ma30.index >= start_date]
-#    ma150 = ma150[ma150.index >= start_date]
-#    ma200 = ma200[ma200.index >= start_date]
-#    mansfield = mansfield[mansfield.index >= start_date]
-#
-#    fig, (ax1, ax2) = plt.subplots(
-#        2, 1,
-#        figsize=(14, 8),
-#        sharex=True,
-#        gridspec_kw={
-#            "height_ratios": [2.2, 1],
-#            "hspace": 0.05
-#        }
-#    )
-#
-#    # ===== Figure Title =====
-#    fig.suptitle(
-#        f"{symbol} — Stage Analysis",
-#        fontsize=16,
-#        fontweight="bold",
-#        x=0.06,
-#        ha="left"
-#    )
-#
-#    # ===== PRICE PANEL =====
-#    ax1.plot(data["Close"], linewidth=1.6, label="Price")
-#    ax1.plot(ma30, label="MA30")
-#    ax1.plot(ma150, label="MA150")
-#    ax1.plot(ma200, label="MA200")
-#
-#    ax1.set_title(f"{symbol} — {d['stage']}", loc="left")
-#    ax1.legend(loc="upper left")
-#    ax1.grid(True)
-#
-#    # ===== RS PANEL =====
-#    ax2.plot(mansfield, linewidth=1.5, label="Mansfield RS")
-#    ax2.axhline(0, linestyle="--", alpha=0.6)
-#
-#    ax2.set_title("Relative Strength (Mansfield)")
-#    ax2.legend(loc="upper left")
-#    ax2.grid(True)
-#
-#    buf = io.BytesIO()
-#    plt.tight_layout()
-#    plt.savefig(buf, format="png")
-#    plt.close(fig)
-#    buf.seek(0)
-#
-#    return buf
-
-
 # ==========================================================
 # Stage Analysis - Mansfield RS Plot
 # ==========================================================
@@ -1718,7 +1357,6 @@ def plot_stage_rs(symbol: str):
 
     return buf
 
-
 # ==========================================================
 # SATA PLOT
 # ==========================================================
@@ -1726,7 +1364,6 @@ def plot_sata(symbol: str):
     apply_tv_style()
 
     rs_df = calculate_mansfield_rs(symbol)
-    #df, sata = calculate_sata(symbol)
     df, sata, rs = calculate_sata(symbol)
 
     latest_score = int(sata["score"].iloc[-1])
@@ -1736,7 +1373,6 @@ def plot_sata(symbol: str):
     is_breakout = detect_breakout(df)
 
     latest_score = sata["score"].iloc[-1]
-
 
     # ===============================
     # ADVANCED PRO+ LOGIC
@@ -1754,8 +1390,6 @@ def plot_sata(symbol: str):
     stage_transition = detect_stage_transition(df)
 
     strong_stage2 = detect_strong_stage2(latest_score, breakout_volume)
-    #strong_stage2 = detect_strong_stage2(latest_score, is_breakout)
-
 
     # ===== จำกัดช่วงเวลาแสดงผลย้อนหลัง 1 ปี =====
     end_date = rs_df.index.max()
@@ -1786,7 +1420,6 @@ def plot_sata(symbol: str):
         fontweight="bold",
         color="white"
     )
-
 
     # ===== Panel 1: Mansfield RS =====
     ax1.plot(rs_df.index, rs_df["rs"], color="#00E5FF", linewidth=1.8)
@@ -1824,7 +1457,6 @@ def plot_sata(symbol: str):
     ax2.set_title("SATA Score", loc="left", fontsize=11)
     ax2.grid(True)
 
-
     # COMMON STYLE
     for ax in [ax1, ax2]:
 
@@ -1847,59 +1479,27 @@ def plot_sata(symbol: str):
 
     return buf
 
-
-
 # ==========================================================
 # Telegram Handlers
 # ==========================================================
-#async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#    await update.message.reply_text(START_TEXT)
-
-
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         START_TEXT,
         reply_markup=main_menu_keyboard()
     )
 
-
-# ===============================
-# 📊 TELEGRAM STAGE COMMAND
-# ===============================
-
-#async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#    if not context.args:
-#        await update.message.reply_text("กรุณาพิมพ์ชื่อหุ้น เช่น AAPL")
-#        return
-#
-#    symbol = context.args[0].upper()
-#    context.user_data["last_symbol"] = symbol
-#
-#    try:
-#        buf = plot_stage_analysis(symbol)
-#    except Exception:
-#        await update.message.reply_text("❌ ไม่พบข้อมูลหุ้นนี้")
-#        return
-#
-#    await update.message.reply_photo(
-#        photo=buf,
-#        reply_markup=post_result_keyboard(symbol)
-#    )
-
 # ==========================================================
 # CALLBACK MENU
 # ==========================================================
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    
-    #await query.answer()
 
-    #from telegram.error import BadRequest
+    await query.answer()
 
-    try:
-        await query.answer()
-    except BadRequest:
-        pass
+    #try:
+    #    await query.answer()
+    #except BadRequest:
+    #    pass
 
     data = query.data
 
@@ -1923,24 +1523,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "impulse"
         await query.message.reply_text("⚡ พิมพ์สัญลักษณ์หุ้น เช่น `TSLA`")
 
-    elif data == "menu_im1":
-        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
-        symbols = get_all_symbols()
-        context.user_data["mode"] = "im1"        
-        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
-        #print(f"Loaded symbols: {len(symbols)} ตัว")
-        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
-
-    elif data == "menu_im2":
-        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
-        symbols = get_all_symbols()
-        context.user_data["mode"] = "im2"
-        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
-        #print(f"Loaded symbols: {len(symbols)} ตัว")
-        await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
-
-
-
     elif data == "menu_man":
         context.user_data["mode"] = "man"
         await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
@@ -1949,14 +1531,19 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "stage"
         await query.message.reply_text("📊 พิมพ์สัญลักษณ์หุ้น เช่น `AAPL`")
 
+    elif data == "menu_im1":
+        await query.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+        symbols = get_all_symbols()
+        context.user_data["mode"] = "im1"        
+        #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+        #print(f"Loaded symbols: {len(symbols)} ตัว")
+        await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
 
     elif data == "menu_stage_scan":
         await query.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
         symbols = get_all_symbols()
         context.user_data["symbols"] = symbols
         await cmd_stage_scan(query, context)
-
-
 
     elif data == "menu_help":
         await query.message.reply_text(HELP_TEXT)
@@ -1966,7 +1553,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             START_TEXT,
             reply_markup=main_menu_keyboard()
         )
-
     
     # 🔁 วิเคราะห์ต่อทันที
     elif data.startswith("again_ta:"):
@@ -1999,11 +1585,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [symbol]
         await cmd_stage(query, context)
 
-    elif data.startswith("again_stage_scan:"):
-        symbol = data.split(":")[1]
-        context.args = [symbol]
-        await cmd_stage_scan(query, context)
-
 
 
 # ==========================================================
@@ -2025,379 +1606,32 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_sr(update, context)
     elif mode == "ch":
         await cmd_ch(update, context)
-    elif mode == "im1":
-        await cmd_im1(update, context)
-    elif mode == "im2":
-        await cmd_im2(update, context)
-
     elif mode == "man":
         await cmd_man(update, context)
 
     elif mode == "stage":
         await cmd_stage(update, context)
 
+    elif mode == "im1":
+        await cmd_im1(update, context)
+
     elif mode == "stage2scan":
         await cmd_stage_scan(update, context)
-
-    
-
-
-
-
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_TEXT)
     context.user_data["last_symbol"] = symbol
 
-
-
-async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    
-    try:
-        d = analyze(symbol)
-    except ValueError:
-        await update.message.reply_text(
-            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
-        )
-        return
-
-
-    pre_text = "-"
-    post_text = "-"
-
-    if d["pre_market"]:
-        gap = f" ({d['pre_gap_pct']:+.2f}%)" if d["pre_gap_pct"] else ""
-        pre_text = f"${d['pre_market']:.2f}{gap}"
-
-    if d["post_market"]:
-        gap = f" ({d['post_gap_pct']:+.2f}%)" if d["post_gap_pct"] else ""
-        post_text = f"${d['post_market']:.2f}{gap}"
-
-
-    thesis = pro_investor_thesis(
-        d['price'],
-        d['ema50'],
-        d['ema100'],
-        d['ema200'],
-        d['rsi'],
-        d['slope200'],
-        d['macd'].iloc[-1],
-        d['signal'].iloc[-1],
-        d['hist'].iloc[-1],
-    )
-
-    #text = (
-    #    f"📊 {symbol}\n"
-    #    f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
-
-    text = (
-        f"📊 {symbol}\n"
-        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n"
-        f"🌅 ราคาก่อนตลาดเปิด: {pre_text}\n"
-        f"🌙 ราคาหลังตลาดปิด: {post_text}\n\n"
-        f"• EMA50: {d['ema50']:.2f}\n"
-        f"• EMA100: {d['ema100']:.2f}\n"
-        f"• EMA200: {d['ema200']:.2f}\n"
-        f"• RSI14: {d['rsi']:.2f}\n\n"
-        f"• MACD: {d['macd'].iloc[-1]:.3f}\n"
-        f"• Signal: {d['signal'].iloc[-1]:.3f}\n"
-        f"• Hist: {d['hist'].iloc[-1]:+.3f}\n\n"
-        #f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
-        #f"{format_sr_zones(d['price'], d['supports'], d['resistances'])}\n\n"
-        f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
-        f"🧠 บทสรุปเชิงกลยุทธ์\n"
-        f"{thesis}"
-    )
-
-
-
-
-    await update.message.reply_text(
-        text,
-        reply_markup=post_result_keyboard(symbol)
-    )
-    #await update.message.reply_text(
-    #    text,
-    #    reply_markup=post_result_keyboard()
-    #)
-
-
-    
-async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    try:
-        d = analyze(symbol)
-    except ValueError:
-        await update.message.reply_text(
-            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
-        )
-        return
-
-
-    ai = ai_thesis_generator(
-        symbol,
-        d["price"],
-        d["ema50"],
-        d["ema100"],
-        d["ema200"],
-        d["rsi"],
-        d["macd"].iloc[-1],
-        d["signal"].iloc[-1],
-        d["hist"].iloc[-1],
-        d["supports"],
-        d["resistances"],
-    )
-
-    text = (
-        "📊 {symbol}\n"
-        "💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
-        "🤖 AI Thesis\n{ai}"
-    ).format(
-        symbol=symbol,
-        price=d["price"],
-        change=d["change_pct"],
-        ai=ai,
-    )
-
-    await update.message.reply_text(
-        text,
-        reply_markup=post_result_keyboard(symbol)
-    )
-    #await update.message.reply_text(
-    #    text,
-    #    reply_markup=post_result_keyboard()
-    #)
-
-
-async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    try:
-        data_1y = yf.Ticker(symbol).history(period="1y")
-        if data_1y.empty or len(data_1y) < 50:
-            raise ValueError
-    except Exception:
-        await update.message.reply_text("❌ ไม่พบชื่อหุ้นนี้")
-        return
-
-    price = data_1y["Close"].iloc[-1]
-    highs = data_1y["High"].values
-    lows = data_1y["Low"].values
-    prev_price = data_1y["Close"].iloc[-2]
-    change = (price - prev_price) / prev_price * 100
-
-
-    support, resistance = calculate_support_resistance_zones(
-        highs, lows, price
-    )
-
-    risk_pct, reward_pct, rr = calculate_rr(price, support, resistance)
-
-    text = f"📐 SR Zones — {symbol}\n"
-    #text += f"💵 Price: {price:.2f}\n\n"
-    text += f"💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
-    #text += f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
-
-    text += "🟢 Support Zones\n"
-    if support:
-        for s in support:
-            dist = (price - s["mid"]) / price * 100
-            text += f"  • {s['mid']:.0f} (↓ {dist:.2f}%) | S={s['strength']}\n"
-    else:
-        text += "  • ไม่มีระดับที่ชัดเจน\n"
-
-    text += "\n🔴 Resistance Zones\n"
-    if resistance:
-        for r in resistance:
-            dist = (r["mid"] - price) / price * 100
-            text += f"  • {r['mid']:.0f} (↑ {dist:.2f}%) | S={r['strength']}\n"
-    else:
-        text += "  • ไม่มีระดับที่ชัดเจน\n"
-
-    if rr:
-        text += (
-            f"\n⚖️ Risk / Reward\n"
-            f"  • Downside risk: ↓{risk_pct:.2f}%\n"
-            f"  • Upside reward: ↑{reward_pct:.2f}%\n"
-            f"  • R/R Ratio: {rr:.2f}x\n"
-        )
-
-        if rr >= 3:
-            text += "🟢 โครงสร้างราคาน่าสนใจ (Asymmetric)\n"
-        elif rr >= 2:
-            text += "🟡 โครงสร้างสมดุล\n"
-        else:
-            text += "🔴 Risk สูงเมื่อเทียบกับ Reward\n"
-    else:
-        text += "• ไม่สามารถประเมิน Risk / Reward ได้\n"
-
-    #await update.message.reply_text(
-    #    text,
-    #    reply_markup=post_result_keyboard()
-    #)
-    await update.message.reply_text(
-        text,
-        reply_markup=post_result_keyboard(symbol)
-    )
-
-
-
-async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    try:
-        chart = plot_technical_chart(symbol)
-    except Exception:
-        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟได้")
-        return
-
-    await update.message.reply_photo(
-        photo=chart,
-        caption=f"📈 {symbol}\nPrice + EMA + MACD + Support / Resistance + RSI",
-        #reply_markup=post_result_keyboard()
-        reply_markup=post_result_keyboard(symbol)
-    )
-
-async def cmd_man(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    try:
-        chart = plot_stage_rs(symbol)
-    except Exception:
-        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟ Stage RS ได้")
-        return
-
-    await update.message.reply_photo(
-        photo=chart,
-        caption=f"📊 {symbol} — Mansfield RS",
-        reply_markup=post_result_keyboard(symbol)
-    )
-
-
 # ===============================
 # ADVANCED PRO+ DETECTION ENGINE
 # ===============================
-
-def detect_volume_contraction(df, lookback=20):
-    recent_vol = df["Volume"].tail(lookback)
-    return recent_vol.mean() < df["Volume"].rolling(50).mean().iloc[-1]
-
-
-def detect_breakout_volume(df, breakout_level):
-    latest_vol = df["Volume"].iloc[-1]
-    avg_vol = df["Volume"].rolling(50).mean().iloc[-1]
-    price_breakout = df["Close"].iloc[-1] > breakout_level
-    volume_expansion = latest_vol > avg_vol * 1.5
-    return price_breakout and volume_expansion
-
-
 def detect_rs_new_high(rs_series, lookback=60):
     recent_high = rs_series.tail(lookback).max()
     return rs_series.iloc[-1] >= recent_high
 
-
-def detect_stage_transition(df):
-    ma50 = df["Close"].rolling(50).mean()
-    ma200 = df["Close"].rolling(200).mean()
-
-    if ma50.iloc[-1] > ma200.iloc[-1] and ma50.iloc[-20] <= ma200.iloc[-20]:
-        return "Stage 1 ➜ Stage 2"
-
-    if ma50.iloc[-1] < ma200.iloc[-1] and ma50.iloc[-20] >= ma200.iloc[-20]:
-        return "Stage 3 ➜ Stage 4"
-
-    return None
-
-
 def detect_strong_stage2(score, breakout):
     return score >= 8 and breakout
-
-
-async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    #if not context.args:
-    #    await update.message.reply_text("กรุณาพิมพ์ชื่อหุ้น เช่น AAPL")
-    #    return
-
-    symbol = context.args[0].upper()
-    context.user_data["last_symbol"] = symbol
-
-    try:
-        # ===== เรียกข้อมูล SATA =====
-        #df, sata = calculate_sata(symbol)
-        df, sata, rs = calculate_sata(symbol)
-
-        latest_score = int(sata["score"].iloc[-1])
-        #stage_label = detect_stage_pro(df, sata)
-        stage_label = detect_weinstein_stage(df)
-        is_base = detect_base(df)
-        is_breakout = detect_breakout(df)
-
-        # ===== สร้างกราฟ =====
-        chart = plot_sata(symbol)
-
-    except Exception as e:
-        await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
-        return
-
-
-    # ===============================
-    # ADVANCED PRO+ LOGIC
-    # ===============================
-
-    volume_contraction = detect_volume_contraction(df)
-
-    base_high = df["High"].rolling(30).max().iloc[-2]
-
-    breakout = df["Close"].iloc[-1] > base_high
-
-    breakout_volume = detect_breakout_volume(df, base_high)
-
-    rs_new_high = detect_rs_new_high(rs)
-
-    stage_transition = detect_stage_transition(df)
-
-    strong_stage2 = detect_strong_stage2(latest_score, breakout)
-
-
-    caption_text = f"""
-    📊 {symbol} — Stage Analysis
-
-    Stage: {stage_label}
-
-    SATA Score: {latest_score}/10
-    Base Forming: {"Yes" if is_base else "No"}
-    Breakout: {"Yes 🚀" if is_breakout else "No"}
-
-    Volume Contraction: {"Yes 📉" if volume_contraction else "No"}
-    Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
-    RS New High: {"Yes 💪" if rs_new_high else "No"}
-
-    Stage Transition: {stage_transition if stage_transition else "None"} 
-    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}   
-    """
-
-    
-
-    #await update.message.reply_photo(
-    #    photo=chart,
-    #    caption=caption_text
-    #)
-
-    await update.message.reply_photo(
-        photo=chart,
-        caption=caption_text,
-        #caption=f"📊 {symbol} — Stage Analysis",
-        reply_markup=post_result_keyboard(symbol)
-    )
 
 # ==========================================================
 # IMACD SCAN COMMANDS (/im1 /im2)
@@ -2406,20 +1640,27 @@ async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
 
+
+
+
+
+
+
+
     symbols = get_all_symbols()
     await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
-
-
-async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 กำลังสแกน Impulse GREEN ≥ 3 วัน ...")
-
-    symbols = get_all_symbols()
-    await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
-
 
 async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+
+
+
+
+
+
+
+
 
     symbols = context.user_data.get("symbols")
 
@@ -2429,7 +1670,8 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
         return
 
-    #import math
+   
+
 
     chunk = 20
     pages = math.ceil(len(results) / chunk)
@@ -2438,7 +1680,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         part = results[p*chunk:(p+1)*chunk]
 
-        text = f"🚀 Stage 2 Scan ({p+1}/{pages})\n\n"
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
 
         if p == 0:
             text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
@@ -2453,10 +1695,8 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # breakout signal
             if r["breakout"]:
-                #text += " 🚀 Breakout"
-                text += " | Breakout 🚀"
+                text += " | 🚀"
             else:
-                #text += " | No Breakout"
                 text += ""
 
             # RS signal
@@ -2481,6 +1721,7 @@ async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu_keyboard()
             )
 
+
         else:
             await update.message.reply_text(text)
 
@@ -2495,20 +1736,7 @@ def count_green_streak(sh_series: pd.Series) -> int:
             break
     return streak
 
-
-#def get_sp500_symbols():
-#    table = pd.read_html(
-#        "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-#    )
-#    symbols = table[0]["Symbol"].tolist()
-#
-#    # แก้ BRK.B → BRK-B format สำหรับ yfinance
-#    symbols = [s.replace(".", "-") for s in symbols]
-#    return symbols
-
-
 def get_sp500_symbols():
-    #import pandas as pd
 
     url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
     df = pd.read_csv(url)
@@ -2518,44 +1746,29 @@ def get_sp500_symbols():
 
     return symbols
 
-
-#NASDAQ100_SYMBOLS = None
-#
-#def get_nasdaq100_symbols():
-#    global NASDAQ100_SYMBOLS
-#
-#    if NASDAQ100_SYMBOLS:
-#        return NASDAQ100_SYMBOLS
-#
-#    #import pandas as pd
-#    #import requests
-#    #from io import StringIO
-#
-#    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-#    headers = {"User-Agent": "Mozilla/5.0"}
-#
-#    r = requests.get(url, headers=headers)
-#    tables = pd.read_html(StringIO(r.text))
-#
-#    df = tables[4]
-#
-#    NASDAQ100_SYMBOLS = [s.replace(".", "-") for s in df["Ticker"].dropna()]
-#    return NASDAQ100_SYMBOLS
-
-
 def get_nasdaq100_symbols():
+    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    df = pd.read_csv(url)
 
-    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Ticker"].dropna().tolist()
 
-    r = requests.get(url, headers=headers)
-    tables = pd.read_html(StringIO(r.text))
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
 
-    df = tables[4]
+    #return symbols[:100]
 
-    symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+    #url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    #headers = {"User-Agent": "Mozilla/5.0"}
+    #
+    #r = requests.get(url, headers=headers)
+    #tables = pd.read_html(StringIO(r.text))
+    #
+    #df = tables[4]
+    #
+    #symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
     return symbols
-    
 
 def get_all_symbols():
     """
@@ -2571,6 +1784,166 @@ def get_all_symbols():
 
     return symbols
 
+# ===============================
+# ADVANCED PRO+ DETECTION ENGINE
+# ===============================
+def detect_rs_new_high(rs_series, lookback=60):
+    recent_high = rs_series.tail(lookback).max()
+    return rs_series.iloc[-1] >= recent_high
+
+def detect_strong_stage2(score, breakout):
+    return score >= 8 and breakout
+
+# ==========================================================
+# IMACD SCAN COMMANDS (/im1 /im2)
+# ==========================================================
+
+async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔎 กำลังสแกน Impulse GREEN 1–2 วัน ...")
+
+
+
+
+
+
+
+
+    symbols = get_all_symbols()
+    await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
+
+async def cmd_stage_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    #await update.message.reply_text("🔎 กำลังสแกน Stage 2 ทั้งตลาด...")
+
+
+
+
+
+
+
+
+
+    symbols = context.user_data.get("symbols")
+
+    results = scan_stage2_market(symbols)
+
+    if not results:
+        await update.message.reply_text("❌ ไม่พบหุ้น Stage 2")
+        return
+
+   
+
+
+    chunk = 20
+    pages = math.ceil(len(results) / chunk)
+
+    for p in range(pages):
+
+        part = results[p*chunk:(p+1)*chunk]
+
+        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
+
+        if p == 0:
+            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
+
+        for r in part:
+
+            text += (
+                f"🟢 {r['symbol']} "
+                f"| Score {r['score']}/10 "
+                f"| ${r['price']:.2f}"
+            )
+
+            # breakout signal
+            if r["breakout"]:
+                text += " | 🚀"
+            else:
+                text += ""
+
+            # RS signal
+            if r["rs"]:
+                text += " | RS↑"
+
+            text += "\n"
+
+            attrs = [
+                r["a1"], r["a2"], r["a3"], r["a4"], r["a5"],
+                r["a6"], r["a7"], r["a8"], r["a9"], r["a10"]
+            ]
+
+            attr_text = "".join(["✅" if x == 1 else "❌" for x in attrs])
+
+            text += f"   SATA: {attr_text}\n"
+
+        if p == pages - 1:
+
+            await update.message.reply_text(
+                text,
+                reply_markup=main_menu_keyboard()
+            )
+
+
+        else:
+            await update.message.reply_text(text)
+
+
+def count_green_streak(sh_series: pd.Series) -> int:
+    streak = 0
+    #for val in reversed(sh_series):
+    for val in sh_series.iloc[::-1]:
+        if val > 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+def get_sp500_symbols():
+
+    url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+    df = pd.read_csv(url)
+
+    symbols = df["Symbol"].dropna().tolist()
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    return symbols
+
+def get_nasdaq100_symbols():
+    #url = "https://datahub.io/core/nasdaq-listings/r/nasdaq-listed-symbols.csv"
+    url = "https://raw.githubusercontent.com/Gary-Strauss/NASDAQ100_Constituents/master/data/nasdaq100_constituents.csv"
+    df = pd.read_csv(url)
+
+    # ✅ ลบ NaN ออกก่อน
+    symbols = df["Ticker"].dropna().tolist()
+
+    # ✅ แปลงเป็น string กันพัง
+    symbols = [str(s).replace(".", "-") for s in symbols]
+
+    #return symbols[:100]
+
+    #url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    #headers = {"User-Agent": "Mozilla/5.0"}
+    #
+    #r = requests.get(url, headers=headers)
+    #tables = pd.read_html(StringIO(r.text))
+    #
+    #df = tables[4]
+    #
+    #symbols = [s.replace(".", "-") for s in df["Ticker"].dropna()]
+    return symbols
+
+def get_all_symbols():
+    """
+    รวมสองตลาด + ลบตัวซ้ำ
+    """
+    sp500 = get_sp500_symbols()
+    nasdaq = get_nasdaq100_symbols()
+
+    symbols = list(set(sp500 + nasdaq))
+
+    #print(f"Loaded symbols: {len(symbols)} ตัว")
+    print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
+
+    return symbols
 
 def scan_impulse_green_streak(
     symbols: list,
@@ -2611,7 +1984,6 @@ def scan_impulse_green_streak(
     results = sorted(results, key=lambda x: x["streak"])
 
     return results
-
 
 # ==========================================================
 # STAGE SCAN ENGINE
@@ -2676,69 +2048,12 @@ def scan_stage2_market(symbols):
         except:
             continue
 
-
     # เรียงจาก SATA Score สูงสุด
     results = sorted(results, key=lambda x: x["score"], reverse=True)
 
     return results
 
-
-#async def run_stage_scan(query, symbols):
-#
-#    results = scan_stage2_market(symbols)
-#
-#    if not results:
-#        await query.edit_message_text("❌ ไม่พบหุ้น Stage 2")
-#        return
-#
-#    import math
-#
-#    chunk = 20
-#    pages = math.ceil(len(results) / chunk)
-#
-#    for p in range(pages):
-#
-#        part = results[p*chunk:(p+1)*chunk]
-#
-#        text = f"🚀 Strong Stage 2 Scan ({p+1}/{pages})\n\n"
-#
-#        if p == 0:
-#            text += f"พบทั้งหมด {len(results)} หุ้น\n\n"
-#
-#        for r in part:
-#
-#            text += (
-#                f"🟢 {r['symbol']} "
-#                f"| Score {r['score']}/10 "
-#                f"| ${r['price']:.2f}"
-#            )
-#
-#            if r["breakout"]:
-#                text += " 🚀"
-#
-#            if r["rs"]:
-#                text += " RS↑"
-#
-#            text += "\n"
-#
-#        await query.message.reply_text(text)
-
-
 async def run_scan(update_or_query, symbols, min_streak, mode, title):
-
-
-
-    # 🔥 STEP A: โหลด symbols
-    #symbols = get_all_symbols()
-
-    # 🔥 STEP B: print ตรงนี้ (จะทำงานแน่นอน)
-    #print(f"Loaded symbols: {len(symbols)} ตัว", flush=True)
-    #print(f"Loaded symbols: {len(symbols)} ตัว")
-
-    # 🔥 STEP C: เอาไปใช้ scan
-    #results = scan_impulse_green_streak(symbols)
-
-
 
     # ✅ แยก message กับ callback ให้ชัด
     if hasattr(update_or_query, "message"):  
@@ -2757,11 +2072,14 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
             mode=mode
         )
 
+
+
+
+
+
         if not results:
             await msg.reply_text("❌ ไม่พบหุ้นตามเงื่อนไข")
             return
-
-        #import math
 
         chunk_size = 20
         total_items = len(results)
@@ -2795,29 +2113,314 @@ async def run_scan(update_or_query, symbols, min_streak, mode, title):
             else:
                 await msg.reply_text(text)
 
-
     except Exception as e:
         await msg.reply_text(f"❌ scan error: {str(e)}")
 
 
-#async def cmd_im1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#    symbols = get_all_symbols()
-#    #await run_scan(update, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
-#    await run_scan(query, symbols, min_streak=3, mode="below", title="🆕 Impulse GREEN Streak 1–2 วัน")
-
-
-#async def cmd_im2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#    symbols = get_all_symbols()
-#    #await run_scan(update, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
-#    await run_scan(query, symbols, min_streak=3, mode="above", title="🚀 Impulse GREEN Streak ≥ 3 วัน")
 
 
 
 
 
+async def cmd_ta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+    
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
 
+    pre_text = "-"
+    post_text = "-"
 
+    if d["pre_market"]:
+        gap = f" ({d['pre_gap_pct']:+.2f}%)" if d["pre_gap_pct"] else ""
+        pre_text = f"${d['pre_market']:.2f}{gap}"
 
+    if d["post_market"]:
+        gap = f" ({d['post_gap_pct']:+.2f}%)" if d["post_gap_pct"] else ""
+        post_text = f"${d['post_market']:.2f}{gap}"
+
+    thesis = pro_investor_thesis(
+        d['price'],
+        d['ema50'],
+        d['ema100'],
+        d['ema200'],
+        d['rsi'],
+        d['slope200'],
+        d['macd'].iloc[-1],
+        d['signal'].iloc[-1],
+        d['hist'].iloc[-1],
+    )
+
+    text = (
+        f"📊 {symbol}\n"
+        f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n"
+        f"🌅 ราคาก่อนตลาดเปิด: {pre_text}\n"
+        f"🌙 ราคาหลังตลาดปิด: {post_text}\n\n"
+        f"• EMA50: {d['ema50']:.2f}\n"
+        f"• EMA100: {d['ema100']:.2f}\n"
+        f"• EMA200: {d['ema200']:.2f}\n"
+        f"• RSI14: {d['rsi']:.2f}\n\n"
+        f"• MACD: {d['macd'].iloc[-1]:.3f}\n"
+        f"• Signal: {d['signal'].iloc[-1]:.3f}\n"
+        f"• Hist: {d['hist'].iloc[-1]:+.3f}\n\n"
+        #f"{format_support_resistance(d['price'], d['supports'], d['resistances'])}\n\n"
+        #f"{format_sr_zones(d['price'], d['supports'], d['resistances'])}\n\n"
+        f"{format_market_comparison(symbol, d['stock_1m'], d['nasdaq_1m'], d['sp500_1m'])}\n\n"
+        f"🧠 บทสรุปเชิงกลยุทธ์\n"
+        f"{thesis}"
+    )
+
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+async def cmd_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        d = analyze(symbol)
+    except ValueError:
+        await update.message.reply_text(
+            "❌ ไม่พบชื่อหุ้นนี้\nกรุณาตรวจสอบสัญลักษณ์อีกครั้ง"
+        )
+        return
+
+    ai = ai_thesis_generator(
+        symbol,
+        d["price"],
+        d["ema50"],
+        d["ema100"],
+        d["ema200"],
+        d["rsi"],
+        d["macd"].iloc[-1],
+        d["signal"].iloc[-1],
+        d["hist"].iloc[-1],
+        d["supports"],
+        d["resistances"],
+    )
+
+    text = (
+        "📊 {symbol}\n"
+        "💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+        "🤖 AI Thesis\n{ai}"
+    ).format(
+        symbol=symbol,
+        price=d["price"],
+        change=d["change_pct"],
+        ai=ai,
+    )
+
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+async def cmd_sr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        data_1y = yf.Ticker(symbol).history(period="1y")
+        if data_1y.empty or len(data_1y) < 50:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ ไม่พบชื่อหุ้นนี้")
+        return
+
+    price = data_1y["Close"].iloc[-1]
+    highs = data_1y["High"].values
+    lows = data_1y["Low"].values
+    prev_price = data_1y["Close"].iloc[-2]
+    change = (price - prev_price) / prev_price * 100
+
+    support, resistance = calculate_support_resistance_zones(
+        highs, lows, price
+    )
+
+    risk_pct, reward_pct, rr = calculate_rr(price, support, resistance)
+
+    text = f"📐 SR Zones — {symbol}\n"
+    #text += f"💵 Price: {price:.2f}\n\n"
+    text += f"💵 ราคา: ${price:.2f} ({change:+.2f}%)\n\n"
+    #text += f"💵 ราคา: ${d['price']:.2f} ({d['change_pct']:+.2f}%)\n\n"
+
+    text += "🟢 Support Zones\n"
+    if support:
+        for s in support:
+            dist = (price - s["mid"]) / price * 100
+            text += f"  • {s['mid']:.0f} (↓ {dist:.2f}%) | S={s['strength']}\n"
+    else:
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
+
+    text += "\n🔴 Resistance Zones\n"
+    if resistance:
+        for r in resistance:
+            dist = (r["mid"] - price) / price * 100
+            text += f"  • {r['mid']:.0f} (↑ {dist:.2f}%) | S={r['strength']}\n"
+    else:
+        text += "  • ไม่มีระดับที่ชัดเจน\n"
+
+    if rr:
+        text += (
+            f"\n⚖️ Risk / Reward\n"
+            f"  • Downside risk: ↓{risk_pct:.2f}%\n"
+            f"  • Upside reward: ↑{reward_pct:.2f}%\n"
+            f"  • R/R Ratio: {rr:.2f}x\n"
+        )
+
+        if rr >= 3:
+            text += "🟢 โครงสร้างราคาน่าสนใจ (Asymmetric)\n"
+        elif rr >= 2:
+            text += "🟡 โครงสร้างสมดุล\n"
+        else:
+            text += "🔴 Risk สูงเมื่อเทียบกับ Reward\n"
+    else:
+        text += "• ไม่สามารถประเมิน Risk / Reward ได้\n"
+
+    #await update.message.reply_text(
+    #    text,
+    #    reply_markup=post_result_keyboard()
+    #)
+    await update.message.reply_text(
+        text,
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+async def cmd_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        chart = plot_technical_chart(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📈 {symbol}\nPrice + EMA + MACD + Support / Resistance + RSI",
+        #reply_markup=post_result_keyboard()
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+async def cmd_man(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        chart = plot_stage_rs(symbol)
+    except Exception:
+        await update.message.reply_text("❌ ไม่สามารถสร้างกราฟ Stage RS ได้")
+        return
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=f"📊 {symbol} — Mansfield RS",
+        reply_markup=post_result_keyboard(symbol)
+    )
+
+# ===============================
+# ADVANCED PRO+ DETECTION ENGINE
+# ===============================
+
+def detect_volume_contraction(df, lookback=20):
+    recent_vol = df["Volume"].tail(lookback)
+    return recent_vol.mean() < df["Volume"].rolling(50).mean().iloc[-1]
+
+def detect_breakout_volume(df, breakout_level):
+    latest_vol = df["Volume"].iloc[-1]
+    avg_vol = df["Volume"].rolling(50).mean().iloc[-1]
+    price_breakout = df["Close"].iloc[-1] > breakout_level
+    volume_expansion = latest_vol > avg_vol * 1.5
+    return price_breakout and volume_expansion
+
+def detect_rs_new_high(rs_series, lookback=60):
+    recent_high = rs_series.tail(lookback).max()
+    return rs_series.iloc[-1] >= recent_high
+
+def detect_stage_transition(df):
+    ma50 = df["Close"].rolling(50).mean()
+    ma200 = df["Close"].rolling(200).mean()
+
+    if ma50.iloc[-1] > ma200.iloc[-1] and ma50.iloc[-20] <= ma200.iloc[-20]:
+        return "Stage 1 ➜ Stage 2"
+
+    if ma50.iloc[-1] < ma200.iloc[-1] and ma50.iloc[-20] >= ma200.iloc[-20]:
+        return "Stage 3 ➜ Stage 4"
+
+    return None
+
+def detect_strong_stage2(score, breakout):
+    return score >= 8 and breakout
+
+async def cmd_stage(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    context.user_data["last_symbol"] = symbol
+
+    try:
+        # ===== เรียกข้อมูล SATA =====
+        df, sata, rs = calculate_sata(symbol)
+
+        latest_score = int(sata["score"].iloc[-1])
+        stage_label = detect_weinstein_stage(df)
+        is_base = detect_base(df)
+        is_breakout = detect_breakout(df)
+
+        # ===== สร้างกราฟ =====
+        chart = plot_sata(symbol)
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ ไม่สามารถสร้างกราฟ SATA ได้\n{str(e)}")
+        return
+
+    # ===============================
+    # ADVANCED PRO+ LOGIC
+    # ===============================
+    volume_contraction = detect_volume_contraction(df)
+
+    base_high = df["High"].rolling(30).max().iloc[-2]
+
+    breakout = df["Close"].iloc[-1] > base_high
+
+    breakout_volume = detect_breakout_volume(df, base_high)
+
+    rs_new_high = detect_rs_new_high(rs)
+
+    stage_transition = detect_stage_transition(df)
+
+    strong_stage2 = detect_strong_stage2(latest_score, breakout)
+
+    caption_text = f"""
+    🚀 {symbol} — Stage Analysis
+
+    Stage: {stage_label}
+
+    SATA Score: {latest_score}/10
+    Base Forming: {"Yes" if is_base else "No"}
+    Breakout: {"Yes 🚀" if is_breakout else "No"}
+
+    Volume Contraction: {"Yes 📉" if volume_contraction else "No"}
+    Breakout Volume >150%: {"Yes 🔥" if breakout_volume else "No"}
+    RS New High: {"Yes 💪" if rs_new_high else "No"}
+
+    Stage Transition: {stage_transition if stage_transition else "None"}
+    Strong Stage 2: {"YES 🚀🔥" if strong_stage2 else "No"}
+    """
+
+    await update.message.reply_photo(
+        photo=chart,
+        caption=caption_text,
+        #caption=f"📊 {symbol} — Stage Analysis",
+        reply_markup=post_result_keyboard(symbol)
+    )
 
 # ==========================================================
 # App Bootstrap
@@ -2826,7 +2429,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(message)s"
 )
-
 
 # ==========================================================
 # REGISTER HANDLER (เพิ่มบรรทัดนี้)
@@ -2847,16 +2449,10 @@ def main():
     app.add_handler(CommandHandler("sr", cmd_sr))
     app.add_handler(CommandHandler("ch", cmd_ch))
 
-    #app.add_handler(CommandHandler("scan", cmd_scan))
-    app.add_handler(CommandHandler("im1", cmd_im1))
-    app.add_handler(CommandHandler("im2", cmd_im2))
-
     app.add_handler(CommandHandler("man", cmd_man))
-
     app.add_handler(CommandHandler("stage", cmd_stage))
 
-    #app.add_handler(CommandHandler("scanmenu", cmd_scanmenu))
-
+    app.add_handler(CommandHandler("im1", cmd_im1))
     app.add_handler(CommandHandler("stage2scan", cmd_stage_scan))
 
     app.run_polling()
