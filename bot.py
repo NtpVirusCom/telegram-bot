@@ -1,4 +1,4 @@
-# ========================================================v.142==
+# ========================================================v.143==
 # Imports & Config
 # ==========================================================
 import io
@@ -34,10 +34,10 @@ def main_menu_keyboard():
             InlineKeyboardButton("🆕 Mansfield RS", callback_data="menu_man"),
             InlineKeyboardButton("🚀 Stage Analysis", callback_data="menu_stage"),
         ],
-        [
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
-        ],
+#        [
+#            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+#            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
+#        ],
         [
             InlineKeyboardButton("📖 Command Guide", callback_data="menu_help"),
         ],
@@ -59,11 +59,11 @@ def post_result_keyboard(symbol: str):
             InlineKeyboardButton("🆕 Mans RS ต่อ", callback_data=f"again_man:{symbol}"),
             InlineKeyboardButton("🚀 Stage ต่อ", callback_data=f"again_stage:{symbol}"),
         ],
-        [
-            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
-            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
-            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
-        ],
+#        [
+#            InlineKeyboardButton("🔍 Impulse MACD", callback_data="menu_im1"),
+#            #InlineKeyboardButton("🔍 Stage 2", callback_data=f"again_stage_scan:{symbol}"),
+#            InlineKeyboardButton("🔍 Stage 2", callback_data="menu_stage_scan"),
+#        ],
         [
             InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home"),
         ],
