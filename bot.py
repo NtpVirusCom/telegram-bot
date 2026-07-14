@@ -1,4 +1,4 @@
-# ========================================================v.301==
+# ========================================================v.302==
 # Imports & Config
 # ==========================================================
 import io
@@ -1758,7 +1758,8 @@ def get_sp500_symbols():
         return _symbol_list_cache[cache_key]
 
     try:
-        url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+        #url = "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
+        url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
         df = pd.read_csv(url)
         symbols = df["Symbol"].dropna().tolist()
         symbols = [str(s).replace(".", "-") for s in symbols]
